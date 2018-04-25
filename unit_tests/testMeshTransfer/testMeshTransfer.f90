@@ -691,6 +691,8 @@ PROGRAM testMeshTransfer
       ASSERT(.NOT. testMT%transferLS%isInit,'Transfer Linear System')
       CALL testMT%clear()
       CALL testPL%clear()
+
+
     ENDSUBROUTINE Test1DCart
 !
 !-------------------------------------------------------------------------------
@@ -698,7 +700,8 @@ PROGRAM testMeshTransfer
       TYPE(MeshTransfer_1DCyl) :: testMT
       TYPE(ParamType) :: testPL
       INTEGER(SIK) :: i
-      REAL(SRK) :: mesh(6),mesh_out(6)
+      REAL(SRK) :: mesh(6),mesh_out(6),r,rMax
+      REAL(SRK), ALLOCATABLE :: rMesh(:),pointData(:),coeff(:),newPointData(:)
 
       mesh=(/0.0_SRK,1.0_SRK,3.0_SRK,4.0_SRK,6.5_SRK,10.0_SRK/)
       DO i=0,5
@@ -833,6 +836,47 @@ PROGRAM testMeshTransfer
       ASSERT(.NOT. testMT%transferLS%isInit,'Transfer Linear System')
       CALL testMT%clear()
       CALL testPL%clear()
+
+      ! Create data from y = 2*r**2-2*r+1
+      ! Pass in as point-wise to create continuous
+      ! Use continuous to create point-wise and make sure it matches
+      allocate(rMesh(10), pointData(10))
+      r = 0.0
+      do i = 1, size(pointData)
+         rMesh(i) = r
+         pointData(i) = 2*r**2-2*r+1
+         r = r+1.0/(size(pointData)-1)
+      end do
+      !pointData = 1.0
+      write(44, *) 'rmesh', rMesh
+      write(44, *) 'point data', pointData
+      call testPL%clear()
+      call testPL%add('MeshTransfer->map_in', 'POINT')
+      call testPL%add('MeshTransfer->map_out', 'CONTINUOUS')
+      call testPL%add('MeshTransfer->pointmesh_in', rMesh)
+      call testPL%add('MeshTransfer->moments_out', 3_SIK)
+      call testMT%init(testPL)
+      
+      call testMT%transfer(pointData, coeff)
+
+      write(44, *) 'coeff', coeff
+
+      call testMT%clear()
+
+      call testPL%clear()
+      call testPL%add('MeshTransfer->map_in', 'CONTINUOUS')
+      call testPL%add('MeshTransfer->map_out', 'POINT')
+      call testPL%add('MeshTransfer->moments_in', size(coeff))
+      call testPL%add('MeshTransfer->pointmesh_out', rMesh)
+      call testMT%init(testPL)
+      
+      call testMT%transfer(coeff, newPointData)
+
+      write(44, *) 'rmesh', rMesh
+      write(44, *) 'point data', newPointData
+
+      call testPL%clear()
+      call testMT%clear()
 
     ENDSUBROUTINE Test1DCyl
 !
