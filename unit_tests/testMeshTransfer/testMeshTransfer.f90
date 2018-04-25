@@ -701,7 +701,7 @@ PROGRAM testMeshTransfer
       TYPE(ParamType) :: testPL
       INTEGER(SIK) :: i
       REAL(SRK) :: mesh(6),mesh_out(6),r,rMax
-      REAL(SRK), ALLOCATABLE :: rMesh(:),pointData(:),coeff(:),newPointData(:)
+      REAL(SRK), ALLOCATABLE :: rMesh(:),pointData(:),coeff(:),newPointData(:), volMesh(:)
 
       mesh=(/0.0_SRK,1.0_SRK,3.0_SRK,4.0_SRK,6.5_SRK,10.0_SRK/)
       DO i=0,5
@@ -854,7 +854,7 @@ PROGRAM testMeshTransfer
       call testPL%add('MeshTransfer->map_in', 'POINT')
       call testPL%add('MeshTransfer->map_out', 'CONTINUOUS')
       call testPL%add('MeshTransfer->pointmesh_in', rMesh)
-      call testPL%add('MeshTransfer->moments_out', 3_SIK)
+      call testPL%add('MeshTransfer->moments_out', 20_SIK)
       call testMT%init(testPL)
       
       call testMT%transfer(pointData, coeff)
@@ -874,6 +874,22 @@ PROGRAM testMeshTransfer
 
       write(44, *) 'rmesh', rMesh
       write(44, *) 'point data', newPointData
+
+      call testPL%clear()
+      call testMT%clear()
+
+      ! Map the coefficients to a volume mesh
+      allocate(volMesh(4))
+      volMesh = [0.0, 0.2, 0.5, 1.0]
+      call testPL%add('MeshTransfer->map_in', 'CONTINUOUS')
+      call testPL%add('MeshTransfer->map_out', 'VOLUME')
+      call testPL%add('MeshTransfer->moments_in', size(coeff))
+      call testPL%add('MeshTransfer->volumemesh_out', volMesh)
+      call testMT%init(testPL)
+      
+      call testMT%transfer(coeff, newPointData)
+
+      write(44, *) newPointData
 
       call testPL%clear()
       call testMT%clear()
