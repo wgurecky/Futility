@@ -337,7 +337,6 @@ MODULE Geom_Graph
                 EXIT
               ENDIF
             ENDDO
-
             !Search other vertices
             dcurr=(/0.0_SRK,-1.0_SRK/)
             IF(vPrev > 0) dcurr=thisGraph%vertices(:,vCurr)- &
@@ -884,7 +883,21 @@ MODULE Geom_Graph
       vPrev=v0
       vCurr=vNext
 
+
+      ! i=0
+      ! DO i=0,n
+      !   write(*,*) i,thisGraph%vertices(:,i)
+      !   ! if(ABS(thisGraph%vertices(1,i)+0.33166247903553997)<1e-4.AND.ABS(thisGraph%vertices(2,i)-0.5)<1e-4) THEN
+      !   ! thisGraph%vertices(2,i)=0.49
+      !   ! endif
+      !   nAdj=nAdjacent_graphType(thisGraph,i)
+      !   j=0
+      !   Do j=1,nAdj
+      !     write(*,*) getAdjacentVert_graphType(thisGraph,i,j)
+      !   ENDDO
+      ! ENDDO
       coord1=thisGraph%vertices(:,vPrev)
+      ! write(*,*) vCurr, '->'
       CALL insertVertex_graphType(subgraph,coord1)
       DO WHILE(vCurr /= 0 .AND. vCurr /= v0 .AND. .NOT.visited(vCurr))
         coord1=thisGraph%vertices(:,vPrev)
@@ -901,7 +914,10 @@ MODULE Geom_Graph
         vNext=getCCWMostVert_graphType(thisGraph,vPrev,vCurr)
         vPrev=vCurr
         vCurr=vNext
+        ! write(*,*) vCurr, '->'
+
       ENDDO
+      ! write(*,*) vCurr, '->'
       IF(vCurr == 0) THEN
         !Found a filament, not necessarily rooted at vPrev
         vCurr=getAdjacentVert_graphType(thisGraph,vPrev,1)
@@ -927,6 +943,9 @@ MODULE Geom_Graph
           vCurr=getVertIndex_graphType(thisGraph,subgraph%vertices(:,i))
           vNext=getVertIndex_graphType(thisGraph,subgraph%vertices(:,j))
           thisGraph%isCycleEdge(vCurr,vNext)=.TRUE.
+          ! CALL removeEdge_IJ_graphType(thisGraph,vCurr,vNext)
+          ! nAdj=nAdjacent_graphType(subgraph,i)
+          ! write(*,*) nAdj,vCurr,'ss',subGraph%edgeMatrix(i,j),subGraph%edgeMatrix(j,i)
         ENDDO
         vCurr=v0
         vNext=getCWMostVert_graphType(thisGraph,0,v0)
@@ -995,6 +1014,7 @@ MODULE Geom_Graph
           CALL removeFilament_vertIdx_graphType(g,1,1)
         ELSE
           CALL extractPrimitive_graphType(g,1,primeGraph)
+          ! WRITE(*,*) isMinimumCycle_graphType(primeGraph)
           IF(isMinimumCycle_graphType(primeGraph)) THEN
             !Found minimum cycle, so add it to basis
             ncycles=ncycles+1
@@ -1111,6 +1131,18 @@ MODULE Geom_Graph
       SELECTTYPE(thisGraph); TYPE IS(GraphType)
         CALL assign_GraphType(g0,thisGraph)
       ENDSELECT
+      ! write(*,*) 'before'
+      ! DO i=0,nVert_graphType(thisGraph)
+      !   write(*,*) i,thisGraph%vertices(:,i)
+      !   ! if(ABS(thisGraph%vertices(1,i)+0.33166247903553997)<1e-4.AND.ABS(thisGraph%vertices(2,i)-0.5)<1e-4) THEN
+      !   ! thisGraph%vertices(2,i)=0.49
+      !   ! endif
+      !   nAdj=nAdjacent_graphType(thisGraph,i)
+      !   j=0
+      !   Do j=1,nAdj
+      !     write(*,*) getAdjacentVert_graphType(thisGraph,i,j)
+      !   ENDDO
+      ! ENDDO
       CALL assign_GraphType(g1,g)
       CALL l1%p1%init(DIM=2,X=0.0_SRK,Y=0.0_SRK)
       CALL l1%p2%init(DIM=2,X=0.0_SRK,Y=0.0_SRK)
@@ -1119,6 +1151,7 @@ MODULE Geom_Graph
       CALL p0%init(DIM=2,X=0.0_SRK,Y=0.0_SRK)
       DO WHILE(nEdge_graphType(g1) > 0)
         n=nVert_graphType(g1)
+        ! write(*,*) n,'xxy'
         v1=0; v2=0
         outer: DO i=1,n
           DO j=i+1,n
@@ -1197,7 +1230,8 @@ MODULE Geom_Graph
                 d=thisGraph%vertices(:,j)
               ENDIF
               IF(thisGraph%edgeMatrix(j,i) == 1) THEN
-                l2%p1%dim=2; l2%p2%dim=2
+                l2%p1%dim=2
+                l2%p2%dim=2
                 l2%p1%coord=c
                 l2%p2%coord=d
                 IF(c1%r == 0.0_SRK) THEN
@@ -1262,6 +1296,7 @@ MODULE Geom_Graph
                                   p1%coord(2)-c1%c%coord(2))
                     IF(p1%coord(2)-c1%c%coord(2) .APPROXGE. 0.0_SRK) &
                       theta=theta+theta_shift
+                    ! write(*,*) c1%thetastt,theta,c1%thetastp,p1%coord,i,j
                     IF(.NOT.((c1%thetastt .APPROXLE. theta) .AND. &
                       (theta .APPROXLE. c1%thetastp+theta_shift))) CALL p1%clear()
                   ENDIF
@@ -1441,8 +1476,8 @@ MODULE Geom_Graph
                     ENDIF
                   ENDIF
                   l1%p1%dim=2; l1%p2%dim=2
-                ELSE
-                  !circle-circle (F-this)
+                ! ELSE
+                !   !circle-circle (F-this)
 
                 ENDIF
               ENDIF
@@ -1503,6 +1538,18 @@ MODULE Geom_Graph
         nAdj=nAdjacent_graphType(g1,v2)
         IF(nAdj == 0) CALL removeVertex_idx_graphType(g1,v2)
       ENDDO
+      ! write(*,*) 'Combine'
+      ! DO i=0,nVert_graphType(thisGraph)
+      !   write(*,*) i,thisGraph%vertices(:,i)
+      !   ! if(ABS(thisGraph%vertices(1,i)+0.33166247903553997)<1e-4.AND.ABS(thisGraph%vertices(2,i)-0.5)<1e-4) THEN
+      !   ! thisGraph%vertices(2,i)=0.49
+      !   ! endif
+      !   nAdj=nAdjacent_graphType(thisGraph,i)
+      !   j=0
+      !   Do j=1,nAdj
+      !     write(*,*) getAdjacentVert_graphType(thisGraph,i,j)
+      !   ENDDO
+      ! ENDDO
       CALL p0%clear()
       CALL p1%clear()
       CALL p2%clear()
