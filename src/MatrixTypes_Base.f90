@@ -35,9 +35,15 @@ MODULE MatrixTypes_Base
 
   PUBLIC :: MatrixType_Paramsflag
   !> set enumeration scheme for matrix types
-  INTEGER(SIK),PARAMETER,PUBLIC :: SPARSE=0,TRIDIAG=1,DENSESQUARE=2,DENSERECT=3
+  INTEGER(SIK),PARAMETER,PUBLIC :: SPARSE=0,TRIDIAG=1,DENSESQUARE=2,DENSERECT=3, &
+                                   BANDED=4,DISTRIBUTED_BANDED=5,DISTR_BLOCKBANDED=6
   PUBLIC :: SparseMatrixType_reqParams,SparseMatrixType_optParams
   PUBLIC :: TriDiagMatrixType_reqParams,TriDiagMatrixType_optParams
+  PUBLIC :: BandedMatrixType_reqParams,BandedMatrixType_optParams
+  PUBLIC :: DistributedBandedMatrixType_reqParams, &
+    DistributedBandedMatrixType_optParams
+  PUBLIC :: DistributedBlockBandedMatrixType_reqParams, &
+    DistributedBlockBandedMatrixType_optParams
   PUBLIC :: DenseRectMatrixType_reqParams,DenseRectMatrixType_optParams
   PUBLIC :: DenseSquareMatrixType_reqParams,DenseSquareMatrixType_optParams
   PUBLIC :: DistributedMatrixType_reqParams,DistributedMatrixType_optParams
@@ -177,6 +183,10 @@ MODULE MatrixTypes_Base
   TYPE(ParamType),PROTECTED,SAVE :: TriDiagMatrixType_reqParams, TriDiagMatrixType_optParams
 
   !> The parameter lists to use when validating a parameter list for
+  !> initialization for a Banded Matrix Type.
+  TYPE(ParamType),PROTECTED,SAVE :: BandedMatrixType_reqParams, BandedMatrixType_optParams
+
+  !> The parameter lists to use when validating a parameter list for
   !> initialization for a Dense Rectangular Matrix Type.
   TYPE(ParamType),PROTECTED,SAVE :: DenseRectMatrixType_reqParams, DenseRectMatrixType_optParams
 
@@ -186,6 +196,14 @@ MODULE MatrixTypes_Base
 
   !> initialization for a Distributed Matrix Type.
   TYPE(ParamType),PROTECTED,SAVE :: DistributedMatrixType_reqParams, DistributedMatrixType_optParams
+
+  !> The parameter lists to use when validating a parameter list for
+  !> initialization for a Banded Matrix Type.
+  TYPE(ParamType),PROTECTED,SAVE :: DistributedBandedMatrixType_reqParams, DistributedBandedMatrixType_optParams
+
+  !> The parameter lists to use when validating a parameter list for
+  !> initialization for a Banded Matrix Type.
+  TYPE(ParamType),PROTECTED,SAVE :: DistributedBlockBandedMatrixType_reqParams, DistributedBlockBandedMatrixType_optParams
 
   !> Logical flag to check whether the required and optional parameter lists
   !> have been created yet for the Matrix Types.
@@ -229,7 +247,7 @@ MODULE MatrixTypes_Base
 !> The optional parameters for the PETSc Matrix Type do not exist.
 !>
     SUBROUTINE MatrixTypes_Declare_ValidParams()
-      INTEGER(SIK) :: n,m,nnz,dnnz(1),onnz(1),matType,MPI_COMM_ID,nlocal
+      INTEGER(SIK) :: n,m,nnz,dnnz(1),onnz(1),matType,MPI_COMM_ID,nlocal,blockSize
       LOGICAL(SBK) :: isSym
 
       !Setup the required and optional parameter lists
@@ -242,12 +260,17 @@ MODULE MatrixTypes_Base
       matType=1
       MPI_COMM_ID=1
       nlocal=-1
+      blockSize = 1
       !Sparse Matrix Type - Required
       CALL SparseMatrixType_reqParams%add('MatrixType->n',n)
       CALL SparseMatrixType_reqParams%add('MatrixType->nnz',nnz)
       !Tri-Diagonal Matrix Type - Required
       CALL TriDiagMatrixType_reqParams%add('MatrixType->n',n)
       CALL TriDiagMatrixType_reqParams%add('MatrixType->isSym',isSym)
+      !Banded Matrix Type - Required
+      CALL BandedMatrixType_reqParams%add('MatrixType->n',n)
+      CALL BandedMatrixType_reqParams%add('MatrixType->m',m)
+      CALL BandedMatrixType_reqParams%add('MatrixType->nnz',nnz)
       !Dense Rectangular Matrix Type - Required
       CALL DenseRectMatrixType_reqParams%add('MatrixType->n',n)
       CALL DenseRectMatrixType_reqParams%add('MatrixType->m',m)
@@ -258,7 +281,22 @@ MODULE MatrixTypes_Base
       CALL DistributedMatrixType_reqParams%add('MatrixType->n',n)
       CALL DistributedMatrixType_reqParams%add('MatrixType->isSym',isSym)
       CALL DistributedMatrixType_reqParams%add('MatrixType->matType',matType)
-      CALL DistributedMatrixType_reqParams%add('MatrixType->MPI_COMM_ID',MPI_COMM_ID)
+      CALL DistributedMatrixType_reqParams%add('MatrixType->MPI_Comm_ID',MPI_COMM_ID)
+      !Distributed Banded Matrix Type - Required
+      CALL DistributedBandedMatrixType_reqParams%add('MatrixType->n',n)
+      CALL DistributedBandedMatrixType_reqParams%add('MatrixType->m',m)
+      CALL DistributedBandedMatrixType_reqParams%add('MatrixType->nnz',nnz)
+      CALL DistributedBandedMatrixType_reqParams%add('MatrixType->MPI_Comm_ID',MPI_COMM_ID)
+      !Distributed Banded Matrix Type - Optional
+      CALL DistributedBandedMatrixType_optParams%add('MatrixType->blockSize',blockSize)
+      CALL DistributedBandedMatrixType_optParams%add('MatrixType->nlocal',nlocal)
+      !Distributed Block Banded Matrix Type - Required
+      CALL DistributedBlockBandedMatrixType_reqParams%add('MatrixType->n',n)
+      CALL DistributedBlockBandedMatrixType_reqParams%add('MatrixType->nnz',nnz)
+      CALL DistributedBlockBandedMatrixType_reqParams%add('MatrixType->MPI_Comm_ID',MPI_COMM_ID)
+      CALL DistributedBlockBandedMatrixType_reqParams%add('MatrixType->blockSize',blockSize)
+      !Distributed Block Banded Matrix Type - Optional
+      CALL DistributedBlockBandedMatrixType_optParams%add('MatrixType->nlocal',nlocal)
 
       !There are no optional parameters at this time.
       CALL DistributedMatrixType_optParams%add('MatrixType->nlocal',nlocal)
@@ -283,12 +321,20 @@ MODULE MatrixTypes_Base
       CALL SparseMatrixType_reqParams%clear()
       !Tri-Diagonal Matrix Type
       CALL TriDiagMatrixType_reqParams%clear()
+      !Banded Matrix Type
+      CALL BandedMatrixType_reqParams%clear()
       !Dense Rectangular Matrix Type
       CALL DenseRectMatrixType_reqParams%clear()
       !Dense Square Matrix Type
       CALL DenseSquareMatrixType_reqParams%clear()
       !Distributed Matrix Type
       CALL DistributedMatrixType_reqParams%clear()
+      !Distributed Banded Matrix Type
+      CALL DistributedBandedMatrixType_reqParams%clear()
+      CALL DistributedBandedMatrixType_optParams%clear()
+      !Distributed Block Banded Matrix Type
+      CALL DistributedBlockBandedMatrixType_reqParams%clear()
+      CALL DistributedBlockBandedMatrixType_optParams%clear()
 
       !There are no optional parameters at this time.
       CALL DistributedMatrixType_optParams%clear()
