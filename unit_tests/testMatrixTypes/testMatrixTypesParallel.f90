@@ -54,7 +54,8 @@ PROGRAM testMatrixTypesParallel
   CALL eParams%addSurrogate(e)
   CALL eMatrixType%addSurrogate(e)
 
-  !REGISTER_SUBTEST("Distributed Banded Matrix",testDistrBandMatrix)
+  REGISTER_SUBTEST("PETSc Matrix",testPetscMatrix)
+  REGISTER_SUBTEST("Distributed Banded Matrix",testDistrBandMatrix)
   REGISTER_SUBTEST("Distributed Block-Banded Matrix",testDistrBlockBandMatrix)
 
 
@@ -78,7 +79,6 @@ CONTAINS
       CLASS(DistributedMatrixType),ALLOCATABLE :: thisMatrix
       TYPE(NativeDistributedVectorType),ALLOCATABLE :: distrVec1, distrVec2
       REAL(SRK),ALLOCATABLE :: dummyvec(:),dummyvec2(:)
-      REAL(SRK) :: val
       LOGICAL(SBK) :: bool
 
 
@@ -88,6 +88,8 @@ CONTAINS
       ASSERT(nproc==2, 'nproc valid')
 !Test for distributed banded matrices
       ALLOCATE(DistributedBandedMatrixType :: thisMatrix)
+
+      COMPONENT_TEST("distBand%clear")
       SELECTTYPE(thisMatrix)
         TYPE IS(DistributedBandedMatrixType)
         !test clear
@@ -106,7 +108,8 @@ CONTAINS
       CALL thisMatrix%clear()
       SELECT TYPE(thisMatrix)
         TYPE IS(DistributedBandedMatrixType)
-          bool = (.NOT.(thisMatrix%isInit).AND.(thisMatrix%n == 0)) &
+          bool = (thisMatrix%isInit == .FALSE. &
+              .AND.(thisMatrix%n == 0) &
               .AND.(thisMatrix%m == 0) &
               .AND.(thisMatrix%nLocal == 0) &
               .AND.(thisMatrix%isCreated == .FALSE.) &
@@ -115,10 +118,12 @@ CONTAINS
               .AND.(thisMatrix%m == 0) &
               .AND.(.NOT.ALLOCATED(thisMatrix%chunks)) &
               .AND.(.NOT.ALLOCATED(thisMatrix%jOffsets)) &
-              .AND.(.NOT.ALLOCATED(thisMatrix%iOffsets))
+              .AND.(.NOT.ALLOCATED(thisMatrix%iOffsets)))
           ASSERT(bool, 'DistributedBandedMatrixType%clear()')
       END SELECT
+
       !check init
+      COMPONENT_TEST("distrBand%init")
       CALL pList%clear()
       CALL pList%add('MatrixType->n',10_SNK)
       CALL pList%add('MatrixType->m',15_SNK)
@@ -153,8 +158,8 @@ CONTAINS
           ENDIF
       ENDSELECT
       CALL thisMatrix%clear()
+
       !test with double init (isInit==true on 2nd try)
-      WRITE(*,*) "Beginning double init"
       CALL thisMatrix%init(pList)
       SELECTTYPE(thisMatrix)
         TYPE IS(DistributedBandedMatrixType); thisMatrix%m=1
@@ -199,9 +204,9 @@ CONTAINS
       bool = .NOT.thisMatrix%isInit
       ASSERT(bool, 'banded%init(...)')
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL banded%init(...)'
 
       !check set
+      COMPONENT_TEST("distBand%set")
       !test normal use case (split diagonal)
       !want to build:
       ![3 0 7 0 0]
@@ -256,8 +261,9 @@ CONTAINS
           ENDIF
       ENDSELECT
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL banded%set(...)'
+
       !check get functionality
+      COMPONENT_TEST("distBand%get")
       ![3 0 7 0 0]
       ![0 4 0 8 0]
       ![1 0 5 0 9]
@@ -281,94 +287,37 @@ CONTAINS
       CALL thisMatrix%set(3,5,9._SRK)
       CALL thisMatrix%assemble()
       IF(ALLOCATED(dummyvec)) DEALLOCATE(dummyvec)
-      ALLOCATE(dummyvec(13))
-      dummyvec=0
-      CALL thisMatrix%get(1,1,dummyvec(1))
-      CALL thisMatrix%get(1,2,dummyvec(2))
-      CALL thisMatrix%get(1,3,dummyvec(3))
-      CALL thisMatrix%get(2,2,dummyvec(4))
-      CALL thisMatrix%get(2,4,dummyvec(5))
-      CALL thisMatrix%get(2,5,dummyvec(6))
-      CALL thisMatrix%get(3,1,dummyvec(7))
-      CALL thisMatrix%get(3,2,dummyvec(8))
-      CALL thisMatrix%get(3,3,dummyvec(9))
-      CALL thisMatrix%get(3,5,dummyvec(10))
-      CALL thisMatrix%get(4,2,dummyvec(11))
-      CALL thisMatrix%get(4,4,dummyvec(12))
-      CALL thisMatrix%get(4,5,dummyvec(13))
-
-      bool = .TRUE.
-      bool = bool .AND. dummyvec(1) == 3._SRK
-      bool = bool .AND. dummyvec(2) == 0._SRK
-      bool = bool .AND. dummyvec(3) == 7._SRK
-      bool = bool .AND. dummyvec(4) == 4._SRK
-      bool = bool .AND. dummyvec(5) == 8._SRK
-      bool = bool .AND. dummyvec(6) == 0._SRK
-      bool = bool .AND. dummyvec(7) == 1._SRK
-      bool = bool .AND. dummyvec(8) == 0._SRK
-      bool = bool .AND. dummyvec(9) == 5._SRK
-      bool = bool .AND. dummyvec(10) == 9._SRK
-      bool = bool .AND. dummyvec(11) == 2._SRK
-      bool = bool .AND. dummyvec(12) == 6._SRK
-      bool = bool .AND. dummyvec(13) == 0._SRK
-      ASSERT(bool, 'banded%get(...)')
+      ALLOCATE(dummyvec(8))
+      IF(ALLOCATED(dummyvec2)) DEALLOCATE(dummyvec2)
+      ALLOCATE(dummyvec2(8))
+      dummyvec=0.0_SRK
+      IF (rank==0) THEN
+        CALL thisMatrix%get(1,1,dummyvec(1))
+        CALL thisMatrix%get(1,2,dummyvec(2))
+        CALL thisMatrix%get(1,3,dummyvec(3))
+        CALL thisMatrix%get(2,2,dummyvec(4))
+        CALL thisMatrix%get(3,1,dummyvec(5))
+        CALL thisMatrix%get(3,2,dummyvec(6))
+        CALL thisMatrix%get(3,3,dummyvec(7))
+        CALL thisMatrix%get(4,2,dummyvec(8))
+        dummyvec2 = (/3.0,0.0,7.0,4.0,1.0,0.0,5.0,2.0/)
+        ASSERT(ALL(dummyvec(1:8) .EQ. dummyvec2(1:8)), 'banded%get(...)')
+      ELSE
+        CALL thisMatrix%get(2,4,dummyvec(1))
+        CALL thisMatrix%get(2,5,dummyvec(2))
+        CALL thisMatrix%get(3,5,dummyvec(3))
+        CALL thisMatrix%get(4,4,dummyvec(4))
+        CALL thisMatrix%get(4,5,dummyvec(5))
+        dummyvec2(1:5) = (/8.0,0.0,9.0,6.0,0.0/)
+        ASSERT(ALL(dummyvec(1:5) .EQ. dummyvec2(1:5)), 'banded%get(...)')
+      ENDIF
+      DEALLOCATE(dummyvec2)
 
       IF(ALLOCATED(dummyvec)) DEALLOCATE(dummyvec)
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL banded%get(...)'
-      !check transpose functionality
-      ![1 2 0 0 0]
-      ![0 3 4 0 0]
-      ![0 0 5 6 0]
-      ![0 0 0 7 0]
-      !with main diagonal split [1,3],[5,7]
-      !to
-      ![1 0 0 0]
-      ![2 3 0 0]
-      ![0 4 5 0]
-      ![0 0 6 7]
-      ![0 0 0 0]
-      ! CALL thisMatrix%clear()
-      ! CALL pList%clear()
-      ! CALL pList%add('MatrixType->n',4_SNK)
-      ! CALL pList%add('MatrixType->m',5_SNK)
-      ! CALL pList%add('MatrixType->nnz',7_SNK)
-      ! CALL pList%add('MatrixType->MPI_COMM_ID',PE_COMM_WORLD)
-      ! CALL pList%validate(pList,optListMat)
-      ! CALL thisMatrix%init(pList)
-      ! CALL thisMatrix%set(1,1,1._SRK)
-      ! CALL thisMatrix%set(1,2,2._SRK)
-      ! CALL thisMatrix%set(2,2,3._SRK)
-      ! CALL thisMatrix%set(2,3,4._SRK)
-      ! CALL thisMatrix%set(3,3,5._SRK)
-      ! CALL thisMatrix%set(3,4,6._SRK)
-      ! CALL thisMatrix%set(4,4,7._SRK)
-      ! CALL thisMatrix%assemble()
-      ! CALL thisMatrix%transpose()
-      !
-      ! ALLOCATE(dummyvec(7))
-      ! CALL thisMatrix%get(1,1,dummyvec(1))
-      ! CALL thisMatrix%get(2,1,dummyvec(2))
-      ! CALL thisMatrix%get(2,2,dummyvec(3))
-      ! CALL thisMatrix%get(3,2,dummyvec(4))
-      ! CALL thisMatrix%get(3,3,dummyvec(5))
-      ! CALL thisMatrix%get(4,3,dummyvec(6))
-      ! CALL thisMatrix%get(4,4,dummyvec(7))
-      !
-      ! bool = .TRUE.
-      ! bool = bool .AND. dummyvec(1) == 1
-      ! bool = bool .AND. dummyvec(2) == 2
-      ! bool = bool .AND. dummyvec(3) == 3
-      ! bool = bool .AND. dummyvec(4) == 4
-      ! bool = bool .AND. dummyvec(5) == 5
-      ! bool = bool .AND. dummyvec(6) == 6
-      ! bool = bool .AND. dummyvec(7) == 7
-      ! ASSERT(bool,"banded%transpose()")
-      !
-      ! CALL thisMatrix%clear()
-      ! WRITE(*,*) '  Passed: CALL banded%transpose(...)'
 
       !check zero_entries functionality
+      COMPONENT_TEST("distBand%zero")
       CALL thisMatrix%clear()
       CALL pList%clear()
       CALL pList%add('MatrixType->n',4_SNK)
@@ -405,9 +354,9 @@ CONTAINS
           ENDDO
       ENDSELECT
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL banded%zero(...)'
 
       !check matvec functionality
+      COMPONENT_TEST("distBand%matvec")
       ![1 2 0 0]
       ![0 3 0 0]
       ![0 0 5 6]
@@ -454,7 +403,7 @@ CONTAINS
         distrVec1%b = (/1._SRK,2._SRK/)
       ELSE
         distrVec1%b = (/3._SRK,4._SRK/)
-      END IF
+      ENDIF
       CALL BLAS_matvec(THISMATRIX=thisMatrix,X=distrVec1,Y=distrVec2,alpha=1.0_SRK,beta=0.0_SRK)
       IF (rank == 0) THEN
         bool = distrVec2%b(1) == 5._SRK
@@ -462,15 +411,33 @@ CONTAINS
         bool = distrVec2%b(2) == 6._SRK
         ASSERT(bool, 'banded%matvec(...)')
       ELSE
-        bool = distrVec2%b(1) == 39._SRK
+        bool = distrVec2%b(3) == 39._SRK
         ASSERT(bool, 'banded%matvec(...)')
-        bool = distrVec2%b(2) == 46._SRK
+        bool = distrVec2%b(4) == 46._SRK
         ASSERT(bool, 'banded%matvec(...)')
-      END IF
-
-      WRITE(*,*) '  Passed: CALL banded%matvec(...)'
+      ENDIF
       DEALLOCATE(thisMatrix)
 
+      CALL pList%clear()
+#endif
+    ENDSUBROUTINE testDistrBandMatrix
+
+    SUBROUTINE testPetscMatrix()
+#ifdef FUTILITY_HAVE_PETSC
+      IMPLICIT NONE
+
+      TYPE(ParamType) :: pList
+      INTEGER(SIK) :: rank,nproc,mpierr
+      CLASS(DistributedMatrixType),ALLOCATABLE :: thisMatrix
+      REAL(SRK) :: val
+
+      CALL MPI_Comm_rank(PE_COMM_WORLD,rank,mpierr)
+      CALL MPI_Comm_size(PE_COMM_WORLD,nproc,mpierr)
+
+      ASSERT(nproc==2, 'nproc valid')
+      ALLOCATE(PETScMatrixType::thisMatrix)
+
+      COMPONENT_TEST("petsc%init")
       ! Create matrix that looks like this
       ! 1 0 2 0
       ! 0 3 0 4
@@ -486,19 +453,14 @@ CONTAINS
       CALL pList%add('MatrixType->onz',2_SNK)
       CALL pList%add('MatrixType->matType',SPARSE)
       CALL pList%add('MatrixType->isSym',.FALSE.)
-      CALL pList%add('MatrixType->MPI_COMM_ID',MPI_COMM_WORLD)
-
-#ifdef FUTILITY_HAVE_PETSC
-      ALLOCATE(PETScMatrixType::thisMatrix)
-
+      CALL pList%add('MatrixType->MPI_COMM_ID',PE_COMM_WORLD)
       CALL thisMatrix%init(pList)
-
-
       !Perform test of init function
       ASSERT(thisMatrix%isInit, "init")
       ASSERT(thisMatrix%n==4, "global size")
 
       ! Test setting/getting single elements at a time
+      COMPONENT_TEST("petsc%set")
       CALL thisMatrix%set(1,1,1._SRK)
       CALL thisMatrix%set(1,3,2._SRK)
       CALL thisMatrix%set(2,2,3._SRK)
@@ -526,6 +488,7 @@ CONTAINS
       ENDIF
 
       ! Test setting row all at once
+      COMPONENT_TEST("petsc%setRow")
       CALL thisMatrix%setRow(1,[1, 3],[10._SRK, 11._SRK])
       CALL thisMatrix%setRow(2,[2, 4],[12._SRK, 13._SRK])
       CALL thisMatrix%setRow(3,[3],[14._SRK])
@@ -551,24 +514,18 @@ CONTAINS
 
       CALL thisMatrix%clear()
       DEALLOCATE(thisMatrix)
-#endif
       CALL pList%clear()
-
 #endif
-    ENDSUBROUTINE testDistrBandMatrix
+    ENDSUBROUTINE testPetscMatrix
 
     SUBROUTINE testDistrBlockBandMatrix()
 #ifdef HAVE_MPI
       IMPLICIT NONE
-
       TYPE(ParamType) :: pList,optListMat,distVecPList
-      INTEGER(SIK) :: rank,nproc,mpierr,i,j
+      INTEGER(SIK) :: rank,nproc,mpierr
       TYPE(DistributedBlockBandedMatrixType),ALLOCATABLE :: thisMatrix
-      TYPE(NativeDistributedVectorType),ALLOCATABLE :: distrVec1, distrVec2
-      REAL(SRK),ALLOCATABLE :: dummyvec(:),dummyvec2(:)
-      REAL(SRK) :: val
+      TYPE(NativeDistributedVectorType),ALLOCATABLE :: distrvec1,distrvec2
       LOGICAL(SBK) :: bool
-
 
       CALL MPI_Comm_rank(PE_COMM_WORLD,rank,mpierr)
       CALL MPI_Comm_size(PE_COMM_WORLD,nproc,mpierr)
@@ -578,6 +535,7 @@ CONTAINS
       ALLOCATE(DistributedBlockBandedMatrixType :: thisMatrix)
 
       !check init
+      COMPONENT_TEST("distBlockBand%init")
       CALL pList%clear()
       CALL pList%add('MatrixType->n',12_SNK)
       CALL pList%add('MatrixType->nnz',9_SNK)
@@ -607,6 +565,7 @@ CONTAINS
       CALL thisMatrix%clear()
 
       !check matvec functionality
+      COMPONENT_TEST("distBlockBand%matvec")
       ![1 2 0 0 0 0]
       ![0 3 0 0 0 0]
       ![0 0 5 6 0 0]
@@ -621,7 +580,7 @@ CONTAINS
       CALL pList%add('MatrixType->MPI_COMM_ID',PE_COMM_WORLD)
       CALL pList%validate(pList,optListMat)
       CALL thisMatrix%init(pList)
-      WRITE(*,*) "matrix set calls"
+
       CALL thisMatrix%set(1,1,1._SRK)
       CALL thisMatrix%set(1,2,2._SRK)
       CALL thisMatrix%set(2,2,3._SRK)
@@ -641,7 +600,6 @@ CONTAINS
       CALL distVecPList%add('VectorType->n',6)
       CALL distVecPList%add('VectorType->chunkSize',2)
       CALL distVecPList%add('VectorType->MPI_Comm_ID',PE_COMM_WORLD)
-      WRITE(*,*) "Vec init"
       CALL distrVec1%init(distVecPList)
       CALL distrVec2%init(distVecPList)
 
@@ -674,7 +632,6 @@ CONTAINS
         ASSERT(ALL(ABS(distrVec2%b-1) < 1E-6),'banded%matvec(...)')
       END IF
 
-      WRITE(*,*) '  Passed: CALL banded%matvec(...)'
       DEALLOCATE(thisMatrix)
       CALL pList%clear()
 #endif

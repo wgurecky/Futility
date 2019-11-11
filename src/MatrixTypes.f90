@@ -426,11 +426,9 @@ MODULE MatrixTypes
       INTEGER(SIK),INTENT(IN),OPTIONAL :: incx_in
       !
       CHARACTER(LEN=1) :: t,ul,d
-      REAL(SRK),ALLOCATABLE :: tmpProduct(:)
       REAL(SRK) :: a,b
       INTEGER(SIK),ALLOCATABLE :: idxMult(:)
-      INTEGER(SIK) :: bIdx,ierr,rank
-      INTEGER(SIK) :: incx
+      INTEGER(SIK) :: bIdx,incx
 
       SELECTTYPE(mat => thisMatrix)
 #ifdef FUTILITY_HAVE_PETSC
@@ -501,14 +499,9 @@ MODULE MatrixTypes
             ENDIF
           TYPE IS(BandedMatrixType)
             IF(ul /= 'n' .OR. d /= 'n' .OR. t /= 'n' .OR. incx /= 1) THEN
-               CALL eMatrixType%raiseError('Incorrect call to '// &
-                    modName//'::'//myName//' - This interface is not implemented.')
-            END IF
-
-            !REQUIRE(thisMatrix%isInit)
-            !REQUIRE(thisMatrix%isAssembled)
-            !REQUIRE(SIZE(x) == thisMatrix%m)
-            !REQUIRE(SIZE(y) == thisMatrix%n)
+              CALL eMatrixType%raiseError('Incorrect call to '// &
+                   modName//'::'//myName//' - This interface is not implemented.')
+            ENDIF
 
             a = 1.0_SRK
             b = 1.0_SRK
@@ -541,7 +534,7 @@ MODULE MatrixTypes
 
           CLASS IS(DistributedBandedMatrixType)
             CALL eMatrixType%raiseError('Incorrect call to '// &
-               modName//'::'//myName//' - This interface is not available.')
+                 modName//'::'//myName//' - This interface is not available.')
           CLASS DEFAULT
             CALL eMatrixType%raiseError('Incorrect call to '// &
                  modName//'::'//myName//' - This interface is not available.')
@@ -578,11 +571,8 @@ MODULE MatrixTypes
       CHARACTER(LEN=1),INTENT(IN),OPTIONAL :: diag
       INTEGER(SIK),INTENT(IN),OPTIONAL :: incx_in
       CHARACTER(LEN=1) :: t,ul,d
-      INTEGER(SIK) :: incx,countS(2),countR(2),i,rank,mpierr,k,count
+      INTEGER(SIK) :: incx
       REAL(SRK) :: a,b
-      REAL(SRK),ALLOCATABLE :: recvResult(:,:),sendResult(:,:),tmpProduct(:)
-      INTEGER(SIK) :: sendRequests(2),recvRequests(2),sendCounter,recvCounter
-      INTEGER(SIK) :: lowIdx,highIdx
 
 #ifdef FUTILITY_HAVE_PETSC
       SELECTTYPE(mat => thisMatrix); TYPE IS(PETScMatrixType)
@@ -685,11 +675,12 @@ MODULE MatrixTypes
               TYPE IS(NativeDistributedVectorType)
                 SELECT TYPE(thisMatrix)
                   CLASS IS(DistributedBandedMatrixType)
-                    CALL matvec_DistrBandedMatrixType(thisMatrix,x%b,y%b,t,ul,d,incx,a,b)
-
+                    CALL matvec_DistrBandedMatrixType(thisMatrix,x%b,y%b,t, &
+                                                      ul,d,incx,a,b)
                   CLASS DEFAULT
                     CALL eMatrixType%raiseError('Incorrect call to '// &
-                         modName//'::'//myName//' - This interface is not available.')
+                         modName//'::'//myName// &
+                         ' - This interface is not available.')
                 ENDSELECT
               CLASS DEFAULT
                 CALL eMatrixType%raiseError('Incorrect call to '// &
@@ -697,8 +688,8 @@ MODULE MatrixTypes
             ENDSELECT
 #endif
           CLASS DEFAULT
-                CALL eMatrixType%raiseError('Incorrect call to '// &
-                    modName//'::'//myName//' - This interface is not available.')
+            CALL eMatrixType%raiseError('Incorrect call to '// &
+                 modName//'::'//myName//' - This interface is not available.')
         ENDSELECT
       ENDIF
     ENDSUBROUTINE matvec_MatrixTypeVectorType
@@ -718,20 +709,22 @@ MODULE MatrixTypes
       CHARACTER(LEN=1),INTENT(IN) :: ul
       CHARACTER(LEN=1),INTENT(IN) :: d
       INTEGER(SIK),INTENT(IN) :: incx
-      INTEGER(SIK) :: i,rank,mpierr,k,l,count,ctDefault
+      INTEGER(SIK) :: rank,k
       INTEGER(SIK),ALLOCATABLE :: recvIdx(:,:), sendIdx(:,:)
       REAL(SRK),ALLOCATABLE :: recvResult(:,:),sendResult(:,:),tmpProduct(:)
-      INTEGER(SIK) :: sendRequests(2),sendIdxRequests(2),recvRequests(2),recvIdxRequests(2),ctRecv(2)
-      INTEGER(SIK) :: lowIdx,highIdx,idxTmp, sendCounter, recvCounter
+      INTEGER(SIK) :: sendRequests(2),sendIdxRequests(2),recvRequests(2)
+      INTEGER(SIK) :: recvIdxRequests(2)
+      INTEGER(SIK) :: lowIdx,highIdx,sendCounter,recvCounter
 
-      ! NOTE: incx,ul,d,t are NOT USED
-
-      ! Get rank; initialize requests/counters
 #ifdef HAVE_MPI
+      ! Get rank
+      INTEGER(SIK) :: i,l,idxTmp,count,ctDefault,ctRecv(2),mpierr
       CALL MPI_Comm_rank(thisMatrix%comm,rank,mpierr)
 #else
       rank = 0
 #endif
+      ! NOTE: incx,ul,d,t are NOT USED
+
       ! We will store our send/recv arrays in an array of length 2
       ! This allows one to be used for computation and one for
       ! communication.
@@ -750,7 +743,8 @@ MODULE MatrixTypes
       ALLOCATE(recvResult(thisMatrix%iOffsets(2),2))
       ALLOCATE(sendIdx(thisMatrix%iOffsets(2),2))
       ALLOCATE(sendResult(thisMatrix%iOffsets(2),2))
-      ALLOCATE(tmpProduct(thisMatrix%iOffsets(rank+2)-thisMatrix%iOffsets(rank+1)))
+      ALLOCATE(tmpProduct(thisMatrix%iOffsets(rank+2) - &
+               thisMatrix%iOffsets(rank+1)))
 
       ! First, take care of locally held data.
       SELECT TYPE(thisMatrix); TYPE IS(DistributedBlockBandedMatrixType)
@@ -758,7 +752,10 @@ MODULE MatrixTypes
           DO k=1,thisMatrix%nlocalBlocks
             lowIdx = (k-1)*thisMatrix%blockSize+1
             highIdx = lowIdx-1 + thisMatrix%blockSize
-            CALL matvec_MatrixType(THISMATRIX=thisMatrix%blocks(k),X=x(lowIdx:highIdx),Y=tmpProduct(lowIdx:highIdx),ALPHA=1.0_SRK,BETA=0.0_SRK)
+            CALL matvec_MatrixType(THISMATRIX=thisMatrix%blocks(k), &
+                                   X=x(lowIdx:highIdx), &
+                                   Y=tmpProduct(lowIdx:highIdx), &
+                                   ALPHA=1.0_SRK,BETA=0.0_SRK)
           ENDDO
         ELSE
           tmpProduct = 0.0_SRK
@@ -775,14 +772,17 @@ MODULE MatrixTypes
             SELECT TYPE(thisMatrix)
             TYPE IS(DistributedBlockBandedMatrixType)
               IF (.NOT. thisMatrix%blockMask) THEN
-                CALL BLAS_matvec(THISMATRIX=thisMatrix%chunks(i),X=x,y=tmpProduct,ALPHA=1.0_SRK,BETA=1.0_SRK)
+                CALL BLAS_matvec(THISMATRIX=thisMatrix%chunks(i),X=x, &
+                                 y=tmpProduct,ALPHA=1.0_SRK,BETA=1.0_SRK)
               ELSE
-                CALL BLAS_matvec(THISMATRIX=thisMatrix%chunks(i),X=x,y=tmpProduct,ALPHA=1.0_SRK,BETA=0.0_SRK)
+                CALL BLAS_matvec(THISMATRIX=thisMatrix%chunks(i),X=x, &
+                                 y=tmpProduct,ALPHA=1.0_SRK,BETA=0.0_SRK)
               ENDIF
             CLASS DEFAULT
-              CALL BLAS_matvec(THISMATRIX=thisMatrix%chunks(i),X=x,y=tmpProduct,ALPHA=1.0_SRK,BETA=0.0_SRK)
+              CALL BLAS_matvec(THISMATRIX=thisMatrix%chunks(i),X=x, &
+                               y=tmpProduct,ALPHA=1.0_SRK,BETA=0.0_SRK)
             ENDSELECT
-          END IF
+          ENDIF
 
           ! Find which other chunks in this row we need to
           ! communicate with
@@ -794,9 +794,12 @@ MODULE MatrixTypes
                 idxTmp = MOD(recvCounter,2)+1
                 ! If we've filled up the available storage, we need
                 ! to wait for communication to finish up
-                CALL pop_recv(tmpProduct, recvResult, recvIdx, ctRecv, idxTmp, recvRequests, recvIdxRequests)
+                CALL pop_recv(tmpProduct, recvResult, recvIdx, ctRecv, idxTmp, &
+                              recvRequests, recvIdxRequests)
                 ctRecv(MOD(recvCounter,2)+1) = ctDefault
-                CALL MPI_IRecv(recvResult(1:ctDefault,idxTmp),ctDefault,MPI_DOUBLE_PRECISION,k-1,0,thisMatrix%comm,recvRequests(idxTmp),mpierr)
+                CALL MPI_IRecv(recvResult(1:ctDefault,idxTmp), ctDefault,     &
+                               MPI_DOUBLE_PRECISION, k-1, 0, thisMatrix%comm, &
+                               recvRequests(idxTmp), mpierr)
               ELSE
                 ! We are receiving multiple sparse chunks
                 DO l=1,SIZE(thisMatrix%bandSizes(k)%p)
@@ -804,18 +807,27 @@ MODULE MatrixTypes
                   idxTmp = MOD(recvCounter,2)+1
                   ! If we've filled up the available storage, we need
                   ! to wait for communication to finish up
-                  CALL pop_recv(tmpProduct, recvResult, recvIdx, ctRecv, idxTmp, recvRequests, recvIdxRequests)
+                  CALL pop_recv(tmpProduct, recvResult, recvIdx, ctRecv, &
+                                idxTmp, recvRequests, recvIdxRequests)
                   ctRecv(idxTmp) = -thisMatrix%bandSizes(k)%p(l)
-                  CALL MPI_IRecv(recvIdx(1:ctRecv(idxTmp),idxTmp),-ctRecv(idxTmp),MPI_INTEGER,k-1,0,thisMatrix%comm,recvIdxRequests(idxTmp),mpierr)
-                  CALL MPI_IRecv(recvResult(1:ctRecv(idxTmp),idxTmp),-ctRecv(idxTmp),MPI_DOUBLE_PRECISION,k-1,0,thisMatrix%comm,recvRequests(idxTmp),mpierr)
+                  CALL MPI_IRecv(recvIdx(1:ctRecv(idxTmp),idxTmp),     &
+                                 -ctRecv(idxTmp), MPI_INTEGER, k-1, 0, &
+                                 thisMatrix%comm,                      &
+                                 recvIdxRequests(idxTmp), mpierr)
+                  CALL MPI_IRecv(recvResult(1:ctRecv(idxTmp),idxTmp),   &
+                                 -ctRecv(idxTmp), MPI_DOUBLE_PRECISION, &
+                                 k-1, 0, thisMatrix%comm,               &
+                                 recvRequests(idxTmp), mpierr)
                 ENDDO
-              END IF
-            END IF
-          END DO
+              ENDIF
+            ENDIF 
+          ENDDO
           ! We've finished calling irecv. Wait for remaining
           ! requests to finish:
-          CALL pop_recv(tmpProduct, recvResult, recvIdx, ctRecv, 1, recvRequests, recvIdxRequests)
-          CALL pop_recv(tmpProduct, recvResult, recvIdx, ctRecv, 2, recvRequests, recvIdxRequests)
+          CALL pop_recv(tmpProduct, recvResult, recvIdx, ctRecv, 1, &
+                        recvRequests, recvIdxRequests)
+          CALL pop_recv(tmpProduct, recvResult, recvIdx, ctRecv, 2, &
+                        recvRequests, recvIdxRequests)
         ELSE
           ! We will be sending data to some other process
           IF (thismatrix%chunks(i)%isInit) THEN
@@ -824,28 +836,40 @@ MODULE MatrixTypes
               sendCounter = sendCounter + 1
               idxTmp = MOD(sendCounter,2)+1
               ! Check if we can safely write to sendRequests
-              CALL pop_send(sendResult, sendIdx, idxTmp, sendRequests, sendIdxRequests)
-              CALL BLAS_matvec(THISMATRIX=thisMatrix%chunks(i),X=x,y=sendResult(1:ctDefault,MOD(sendCounter,2)+1),ALPHA=1.0_SRK,BETA=0.0_SRK)
-              CALL MPI_ISend(sendResult(1:ctDefault,idxTmp), ctDefault, MPI_DOUBLE_PRECISION, i-1, 0,thisMatrix%comm, sendRequests(idxTmp),mpierr)
+              CALL pop_send(sendResult, sendIdx, idxTmp, sendRequests, &
+                            sendIdxRequests)
+              CALL BLAS_matvec(THISMATRIX=thisMatrix%chunks(i), X=x, &
+                               y=sendResult(1:ctDefault,MOD(sendCounter,2)+1), &
+                               ALPHA=1.0_SRK,BETA=0.0_SRK)
+              CALL MPI_ISend(sendResult(1:ctDefault,idxTmp), ctDefault,    &
+                             MPI_DOUBLE_PRECISION, i-1, 0,thisMatrix%comm, &
+                             sendRequests(idxTmp),mpierr)
             ELSE
               ! Send several sparse vectors
               DO l=1,SIZE(thisMatrix%chunks(i)%bandIdx)
                 sendCounter = sendCounter + 1
                 idxTmp = MOD(sendCounter,2)+1
-                CALL pop_send(sendResult, sendIdx, idxTmp, sendRequests, sendIdxRequests)
+                CALL pop_send(sendResult, sendIdx, idxTmp, sendRequests, &
+                              sendIdxRequests)
 
                 ! compute destination indices
                 ! perform special-case multiplication from single band here
                 count = SIZE(thisMatrix%chunks(i)%bands(l)%jIdx)
-                sendIdx(1:count,idxTmp) = thisMatrix%chunks(i)%bands(l)%jIdx - thisMatrix%chunks(i)%bandIdx(l)
-                CALL MPI_ISend(sendIdx(1:count,idxTmp),count,MPI_INTEGER,i-1,0,thisMatrix%comm,sendIdxRequests(idxTmp),mpierr)
-                sendResult(1:count,idxTmp) = thisMatrix%chunks(i)%bands(l)%elem * x(thisMatrix%chunks(i)%bands(l)%jIdx)
-                CALL MPI_ISend(sendResult(1:count,idxTmp),count,MPI_DOUBLE_PRECISION,i-1,0,thisMatrix%comm,sendRequests(idxTmp),mpierr)
+                sendIdx(1:count,idxTmp) = thisMatrix%chunks(i)%bands(l)%jIdx &
+                                          - thisMatrix%chunks(i)%bandIdx(l)
+                CALL MPI_ISend(sendIdx(1:count,idxTmp), count, MPI_INTEGER,   &
+                               i-1, 0, thisMatrix%comm,                       &
+                               sendIdxRequests(idxTmp), mpierr)
+                sendResult(1:count,idxTmp)=thisMatrix%chunks(i)%bands(l)%elem &
+                                          *x(thisMatrix%chunks(i)%bands(l)%jIdx)
+                CALL MPI_ISend(sendResult(1:count,idxTmp), count, &
+                               MPI_DOUBLE_PRECISION, i-1, 0, thisMatrix%comm, &
+                               sendRequests(idxTmp), mpierr)
               ENDDO
             ENDIF
-          END IF
-        END IF
-      END DO
+          ENDIF
+        ENDIF
+      ENDDO
       CALL pop_send(sendResult, sendIdx, 1, sendRequests, sendIdxRequests)
       CALL pop_send(sendResult, sendIdx, 2, sendRequests, sendIdxRequests)
 #endif
@@ -854,27 +878,27 @@ MODULE MatrixTypes
       IF (a == 1.0_SRK) THEN
         IF (b == 1.0_SRK) THEN
           y = tmpProduct + y
-        ELSE IF (b == 0.0_SRK) THEN
+        ELSEIF (b == 0.0_SRK) THEN
           y = tmpProduct
-        ELSE IF (b == -1.0_SRK) THEN
+        ELSEIF (b == -1.0_SRK) THEN
           y = tmpProduct - y
         ELSE
           y = tmpProduct + b*y
-        END IF
-      ELSE IF (a == 0.0_SRK) THEN
+        ENDIF
+      ELSEIF (a == 0.0_SRK) THEN
         IF (b == 0.0_SRK) THEN
           y = 0.0_SRK
-        ELSE IF (b == -1.0_SRK) THEN
+        ELSEIF (b == -1.0_SRK) THEN
           y = -y
-        ELSE IF (b /= 1.0_SRK) THEN
+        ELSEIF (b /= 1.0_SRK) THEN
           y = b*y
-        END IF
-      ELSE IF (a == -1.0_SRK) THEN
+        ENDIF
+      ELSEIF (a == -1.0_SRK) THEN
         IF (b == 1.0_SRK) THEN
           y = y - tmpProduct
-        ELSE IF (b == 0.0_SRK) THEN
+        ELSEIF (b == 0.0_SRK) THEN
           y = -tmpProduct
-        ELSE IF (b == -1.0_SRK) THEN
+        ELSEIF (b == -1.0_SRK) THEN
           y = -tmpProduct - y
         ELSE
           y = b*y - tmpProduct
@@ -882,14 +906,14 @@ MODULE MatrixTypes
       ELSE
         IF (b == 1.0_SRK) THEN
           y = a*tmpProduct + y
-        ELSE IF (b == 0.0_SRK) THEN
+        ELSEIF (b == 0.0_SRK) THEN
           y = a*tmpProduct
-        ELSE IF (b == -1.0_SRK) THEN
+        ELSEIF (b == -1.0_SRK) THEN
           y = a*tmpProduct - y
         ELSE
           y = a*tmpProduct + b*y
-        END IF
-      END IF
+        ENDIF
+      ENDIF
     ENDSUBROUTINE matvec_DistrBandedMatrixType
 
 #ifdef HAVE_MPI

@@ -147,9 +147,8 @@ PROGRAM testMatrixTypes
           thisMatrix%ia(101)=101
       ENDSELECT
 
-      !clear it
+      COMPONENT_TEST("sparse%clear()")
       CALL thisMatrix%clear()
-
       SELECTTYPE(thisMatrix)
         TYPE IS(SparseMatrixType)
           !check for success
@@ -160,11 +159,9 @@ PROGRAM testMatrixTypes
           bool = (.NOT.ALLOCATED(thisMatrix%a) .AND. .NOT.ALLOCATED(thisMatrix%ja)) &
                   .AND. .NOT.ALLOCATED(thisMatrix%ia)
           ASSERT(bool, 'sparse%clear()')
-          WRITE(*,*) '  Passed: CALL sparse%clear()'
       ENDSELECT
 
-      !check init
-
+      COMPONENT_TEST("sparse%init()")
       ! build parameter list
       CALL pList%add('MatrixType->n',10_SNK)
       CALL pList%add('MatrixType->nnz',10_SNK)
@@ -226,7 +223,8 @@ PROGRAM testMatrixTypes
       CALL thisMatrix%init(pList) !expect exception
       ASSERT(.NOT.thisMatrix%isInit, 'sparse%init(...)')
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL sparse%init(...)'
+
+      COMPONENT_TEST("sparse%setShape")
       !test setShape
       !intend to make: [1 0 2]
       !                [0 0 3]
@@ -448,7 +446,9 @@ PROGRAM testMatrixTypes
         CALL mat%setShape(4,3,4.0_SRK)
         CALL mat%setShape(4,4,4.0_SRK)
       ENDSELECT
+
       ! Test both the VectorType and native interface
+      COMPONENT_TEST("sparse%BLAS_matvec")
       IF(ALLOCATED(dummyvec)) DEALLOCATE(dummyvec)
       ALLOCATE(dummyvec(4))
       dummyvec=(/1.0000000_SRK,-0.5000000_SRK,-0.1666666666666666_SRK,-0.083333333333333333_SRK/)
@@ -568,7 +568,6 @@ PROGRAM testMatrixTypes
       ASSERT(bool,'BLAS_matvec(MATRIX,X%b,Y%b,TRANS=''T'',UPLO=''L'',DIAG=''N'',INXC_IN=2_SIK')
       FINFO() 'Result:',yRealVector%b(1:7:2),'Solution:',dummyvec
 
-      WRITE(*,*) '  Passed: CALL BLAS_matvec(...) sparse-matrix'
 
       !Test BLAS_matmult when SparseMatType is supported.
       CALL testMatrixMultSparse()
@@ -584,6 +583,7 @@ PROGRAM testMatrixTypes
         TYPE IS(SparseMatrixType); CALL thisMatrix%setShape(1,1)
       ENDSELECT
 
+      COMPONENT_TEST("sparse%set")
       CALL pList%clear()
       CALL pList%add('MatrixType->n',3_SNK)
       CALL pList%add('MatrixType->nnz',6_SNK)
@@ -602,10 +602,10 @@ PROGRAM testMatrixTypes
           DO i=1,SIZE(thisMatrix%a)
             ASSERT(thisMatrix%a(i) /= 1._SRK, 'sparse%set(...)')
           ENDDO
-          WRITE(*,*) '  Passed: CALL sparse%set(...)'
       ENDSELECT
 
       !Perform test of functionality of get function
+      COMPONENT_TEST("sparse%get")
       ![1 0 2]
       ![0 0 3]
       ![4 5 6]
@@ -644,10 +644,10 @@ PROGRAM testMatrixTypes
           ASSERT(bool, 'sparse%get(...)') !column three check
       ENDSELECT
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL sparse%get(...)'
       DEALLOCATE(thisMatrix)
 !
 !Test for dense square matrices
+      COMPONENT_TEST("denseSquare%clear()")
       ALLOCATE(DenseSquareMatrixType :: thisMatrix)
       SELECTTYPE(thisMatrix)
         TYPE IS(DenseSquareMatrixType)
@@ -665,10 +665,10 @@ PROGRAM testMatrixTypes
               .AND. (.NOT.(thisMatrix%isSymmetric) &
               .AND. (.NOT.ALLOCATED(thisMatrix%a)))
           ASSERT(bool, 'densesquare%clear()')
-          WRITE(*,*) '  Passed: CALL densesquare%clear()'
       ENDSELECT
 
       !check init
+      COMPONENT_TEST("denseSquare%init")
       CALL pList%clear()
       CALL pList%add('MatrixType->n',10_SNK)
       CALL pList%add('MatrixType->isSym',.FALSE.)
@@ -728,7 +728,6 @@ PROGRAM testMatrixTypes
       CALL thisMatrix%init(pList) !expect exception
       bool = .NOT.thisMatrix%isInit
       ASSERT(bool, 'densesquare%init(...)')
-      WRITE(*,*) '  Passed: CALL densesquare%init(...)'
       !check set
       !test normal use case (symmetric and nonsymmetric)
       !want to build:
@@ -943,6 +942,7 @@ PROGRAM testMatrixTypes
 
       CALL testMatrixMultSquare()
 
+      COMPONENT_TEST("denseSquare%set")
       CALL pList%clear()
       CALL pList%add('MatrixType->n',2_SNK)
       CALL pList%add('MatrixType->isSym',.FALSE.)
@@ -970,9 +970,9 @@ PROGRAM testMatrixTypes
       CALL thisMatrix%set(1,5,1._SRK)
       !no crash? good
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL densesquare%set(...)'
 
       !Perform test of functionality of get function
+      COMPONENT_TEST("denseSquare%get")
       ![1 0 2]
       ![0 0 3]
       ![4 5 6]
@@ -1036,11 +1036,11 @@ PROGRAM testMatrixTypes
           ASSERT(bool, 'densesquare%get(...)')
       ENDSELECT
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL densesquare%get(...)'
       DEALLOCATE(thisMatrix)
 !
 !Test for tri-diagonal matrices
       ALLOCATE(TriDiagMatrixType :: thisMatrix)
+      COMPONENT_TEST("tridiag%clear")
       SELECTTYPE(thisMatrix)
         TYPE IS(TriDiagMatrixType)
           !test clear
@@ -1070,9 +1070,9 @@ PROGRAM testMatrixTypes
               .AND.((.NOT.thisMatrix%isSymmetric) &
               .AND.(.NOT.ALLOCATED(thisMatrix%a)))
           ASSERT(bool, 'tridiag%clear()')
-          WRITE(*,*) '  Passed: CALL tridiag%clear()'
       ENDSELECT
       !check init
+      COMPONENT_TEST("tridiag%init")
       CALL pList%clear()
       CALL pList%add('MatrixType->n',10_SNK)
       CALL pList%add('MatrixType->isSym',.FALSE.)
@@ -1132,8 +1132,9 @@ PROGRAM testMatrixTypes
       bool = .NOT.thisMatrix%isInit
       ASSERT(bool, 'tridiag%init(...)')
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL tridiag%init(...)'
+
       !check set
+      COMPONENT_TEST("tridiag%set")
       !test normal use case (symmetric and nonsymmetric)
       !want to build:
       ![1 4 0]
@@ -1214,9 +1215,9 @@ PROGRAM testMatrixTypes
       CALL thisMatrix%set(1,5,1._SRK)
       !no crash? good
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL tridiag%set(...)'
 
       !Perform test of functionality of get function
+      COMPONENT_TEST("tridiag%get")
       ![1 2 0]
       ![4 0 3]
       ![0 5 6]
@@ -1278,11 +1279,11 @@ PROGRAM testMatrixTypes
           ASSERT(bool, 'tridiag%get(...)')
       ENDSELECT
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL tridiag%get(...)'
       DEALLOCATE(thisMatrix)
 !
 !Test for banded matrices
       ALLOCATE(BandedMatrixType :: thisMatrix)
+      COMPONENT_TEST("banded%clear")
       SELECT TYPE(thisMatrix)
         TYPE IS(BandedMatrixType)
           !test clear
@@ -1303,9 +1304,10 @@ PROGRAM testMatrixTypes
               .AND.(thisMatrix%nnz == 0) &
               .AND.(.NOT.ALLOCATED(thisMatrix%bands)))
           ASSERT(bool, 'banded%clear()')
-          WRITE(*,*) '  Passed: CALL banded%clear()'
       END SELECT
+
       !check init
+      COMPONENT_TEST("banded%init")
       CALL pList%clear()
       CALL pList%add('MatrixType->n',10_SNK)
       CALL pList%add('MatrixType->m',15_SNK)
@@ -1362,12 +1364,12 @@ PROGRAM testMatrixTypes
       bool = .NOT.thisMatrix%isInit
       ASSERT(bool, 'banded%init(...)')
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL banded%init(...)'
 
       CALL thisMatrix%clear()
       CALL pList%clear()
 
       !check set
+      COMPONENT_TEST("banded%set")
       !test normal diag use case
       !want to build:
       ![1 2 0 0]
@@ -1400,11 +1402,11 @@ PROGRAM testMatrixTypes
           bool = bool .AND. thisMatrix%bands(1)%elem(1) == 9
           ASSERT(bool, 'banded%set(...)')
       ENDSELECT
-      WRITE(*,*) '  Passed: CALL banded%set(...)'
       CALL thisMatrix%clear()
       CALL pList%clear()
 
       !check get functionality
+      COMPONENT_TEST("banded%get")
       ![1 2 0 0]
       ![0 3 0 0]
       ![0 0 5 6]
@@ -1456,8 +1458,8 @@ PROGRAM testMatrixTypes
       ASSERT(bool, 'banded%get(...)')
 
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL banded%get(...)'
       !check matvec functionality
+      COMPONENT_TEST("banded%matvec")
       ![1 2 0 0]
       ![0 3 0 0]
       ![0 0 5 6]
@@ -1487,9 +1489,7 @@ PROGRAM testMatrixTypes
       SELECTTYPE(thisMatrix)
         TYPE IS(BandedMatrixType)
           CALL thisMatrix%assemble()
-          WRITE(*,*) "calling matvec"
           CALL BLAS_matvec(THISMATRIX=thisMatrix,X=dummyvec,Y=dummyvec2,ALPHA=1.0_SRK,BETA=0.0_SRK)
-          WRITE(*,*) "finished matvec call"
           DO i=1,4
             bool = ABS(dummyvec2(i)) < 1E-6
             ASSERT(bool, 'banded%matvec(...)')
@@ -1509,11 +1509,11 @@ PROGRAM testMatrixTypes
         bool = dummyvec2(4) == 46._SRK
         ASSERT(bool, 'banded%matvec(...)')
       ENDSELECT
-      WRITE(*,*) '  Passed: CALL banded%matvec(...)'
       DEALLOCATE(thisMatrix)
 !
 !Test for dense rectangular matrices
       ALLOCATE(DenseRectMatrixType :: thisMatrix)
+      COMPONENT_TEST("denseRect%clear")
       SELECTTYPE(thisMatrix)
         TYPE IS(DenseRectMatrixType)
           !test clear
@@ -1530,9 +1530,10 @@ PROGRAM testMatrixTypes
               .AND.((thisMatrix%m == 0) &
               .AND.(.NOT.ALLOCATED(thisMatrix%a)))
           ASSERT(bool, 'denserect%clear()')
-          WRITE(*,*) '  Passed: CALL denserect%clear()'
       ENDSELECT
+
       !check init
+      COMPONENT_TEST("denseRect%init")
       CALL pList%clear()
       CALL pList%add('MatrixType->n',10_SNK)
       CALL pList%add('MatrixType->m',15_SNK)
@@ -1579,9 +1580,8 @@ PROGRAM testMatrixTypes
       ASSERT(bool, 'denserect%init(...)')
       CALL thisMatrix%clear()
 
-      WRITE(*,*) '  Passed: CALL denserect%init(...)'
-
       !check set
+      COMPONENT_TEST("denseRect%set")
       !test normal use case (symmetric and nonsymmetric)
       !want to build:
       ![1 2 3]
@@ -1606,6 +1606,7 @@ PROGRAM testMatrixTypes
       ENDSELECT
 
       !Test BLAS_matvec
+      COMPONENT_TEST("denseRect%matvec")
       x=1.0_SRK
       y=1.0_SRK
       CALL BLAS_matvec(THISMATRIX=thisMatrix,X=x,Y=y)
@@ -1655,7 +1656,6 @@ PROGRAM testMatrixTypes
       ASSERT(bool, ' ')
       FINFO() 'BLAS_matvec(THISMATRIX=thisMatrix,ALPHA=2.0_SRK,X=xRealVector,BETA=2.0_SRK,Y=yRealVector)",'
       FINFO() '-denserect'
-      WRITE(*,*) '  Passed: CALL BLAS_matvec(...) denserect-matrix'
 
       CALL testMatrixMultRect()
 
@@ -1673,9 +1673,9 @@ PROGRAM testMatrixTypes
       CALL thisMatrix%set(1,5,1._SRK)
       !no crash? good
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL denserect%set(...)'
 
       !Perform test of functionality of get function
+      COMPONENT_TEST("denseRect%get")
       ![1 0 2]
       ![4 5 3]
       CALL thisMatrix%clear()
@@ -1731,7 +1731,6 @@ PROGRAM testMatrixTypes
           ASSERT(bool, 'densesquare%get(...)')
       ENDSELECT
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL densesquare%get(...)'
       DEALLOCATE(thisMatrix)
 
 !Test for PETSc matrices (if necessary)
@@ -1739,6 +1738,7 @@ PROGRAM testMatrixTypes
 
 !Test for PETSc sparsematrices
       ALLOCATE(PETScMatrixType :: thisMatrix)
+      COMPONENT_TEST("petscSparse%clear")
       SELECTTYPE(thisMatrix)
         TYPE IS(PETScMatrixType)
           !test clear
@@ -1760,7 +1760,9 @@ PROGRAM testMatrixTypes
           ASSERT(bool, 'petscsparse%clear()')
           !check if pointer fo a is null (not supported till 3.3)
       ENDSELECT
+
       !check init
+      COMPONENT_TEST("petscSparse%init")
       CALL pList%clear()
       CALL pList%add('MatrixType->n',10_SNK)
       CALL pList%add('MatrixType->isSym',.FALSE.)
@@ -1817,7 +1819,6 @@ PROGRAM testMatrixTypes
       bool = .NOT.thisMatrix%isInit
       ASSERT(bool, 'petscsparse%init(...)')
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL petscsparse%init(...)'
 
       !check set
       !test normal use case (symmetric and nonsymmetric)
@@ -1865,8 +1866,8 @@ PROGRAM testMatrixTypes
      ENDSELECT
 
 
+      COMPONENT_TEST("petscSparse%set")
       CALL thisMatrix%clear()
-
       CALL pList%clear()
       CALL pList%add('MatrixType->n',2_SNK)
       CALL pList%add('MatrixType->isSym',.FALSE.)
@@ -1907,8 +1908,8 @@ PROGRAM testMatrixTypes
       CALL thisMatrix%set(5,1,1._SRK)
       CALL thisMatrix%set(1,5,1._SRK)
       !no crash? good
-      WRITE(*,*) '  Passed: CALL petscsparse%set(...)'
 
+      COMPONENT_TEST("petscSparse%matvec")
       CALL thisMatrix%clear()
       CALL pList%clear()
       CALL pList%add('MatrixType->n',3_SNK)
@@ -2015,9 +2016,9 @@ PROGRAM testMatrixTypes
       bool = ALL((y .APPROXEQ. (/2._SRK,2._SRK,2._SRK/)))
       ASSERT(bool, 'BLAS_matvec(THISMATRIX=thisMatrix,ALPHA=2.0_SRK,X=xPETScVector,BETA=2.0_SRK,Y=yPETScVector)')
       FINFO() '-petscsparse'
-      WRITE(*,*) '  Passed: CALL BLAS_matvec(...) petscsparse-matrix'
 
       !Perform test of functionality of get function
+      COMPONENT_TEST("petscSparse%get")
       ![1 0 2]
       ![0 0 3]
       ![4 5 6]
@@ -2084,11 +2085,11 @@ PROGRAM testMatrixTypes
           ASSERT(bool, 'petscsparse%get(...)')
       ENDSELECT
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL petscsparse%get(...)'
       DEALLOCATE(thisMatrix)
 
 !Test for PETSc dense square matrices
       ALLOCATE(PETScMatrixType :: thisMatrix)
+      COMPONENT_TEST("petscDense%clear")
       SELECTTYPE(thisMatrix)
         TYPE IS(PETScMatrixType)
           !test clear
@@ -2108,10 +2109,12 @@ PROGRAM testMatrixTypes
           bool = ((.NOT.thisMatrix%isInit).AND.(thisMatrix%n == 0)) &
               .AND.((.NOT.thisMatrix%isSymmetric))
           ASSERT(bool, 'petscdense%clear()')
-           !check if pointer fo a is null (not supported till 3.3)
-          WRITE(*,*) '  Passed: CALL petscdense%clear()'
+           !check if pointer of A is null (not supported till 3.3)
+          !ASSERT(bool, 'petscdense%clear()')
       ENDSELECT
+
       !check init
+      COMPONENT_TEST("petscDense%init")
       CALL pList%clear()
       CALL pList%add('MatrixType->n',10_SNK)
       CALL pList%add('MatrixType->isSym',.FALSE.)
@@ -2158,9 +2161,9 @@ PROGRAM testMatrixTypes
           ASSERT(bool, 'petscdense%init(...)')
       ENDSELECT
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL petscdense%init(...)'
 
       !check set
+      COMPONENT_TEST("petscDense%set")
       !test normal use case (symmetric and nonsymmetric)
       !want to build:
       ![1 2]
@@ -2238,9 +2241,9 @@ PROGRAM testMatrixTypes
       CALL thisMatrix%set(5,1,1._SRK)
       CALL thisMatrix%set(1,5,1._SRK)
       !no crash? good
-      WRITE(*,*) '  Passed: CALL petscdense%set(...)'
 
       !Test BLAS_matvec
+      COMPONENT_TEST("petscDense%matvec")
       CALL thisMatrix%clear()
       CALL pList%clear()
       CALL pList%add('MatrixType->n',3_SNK)
@@ -2347,9 +2350,9 @@ PROGRAM testMatrixTypes
       bool = ALL((y .APPROXEQ. (/2._SRK,2._SRK,2._SRK/)))
       ASSERT(bool, 'BLAS_matvec(THISMATRIX=thisMatrix,ALPHA=2.0_SRK,X=xPETScVector,BETA=2.0_SRK,Y=yPETScVector)')
       FINFO() '-petscdense'
-      WRITE(*,*) '  Passed: CALL BLAS_matvec(...) petscdense-matrix'
 
       !Perform test of functionality of get function
+      COMPONENT_TEST("petscDense%get")
       ![1 0 2]
       ![0 0 3]
       ![4 5 6]
@@ -2415,8 +2418,6 @@ PROGRAM testMatrixTypes
       ENDSELECT
       CALL thisMatrix%clear()
 
-      WRITE(*,*) '  Passed: CALL petscdensesquare%get(...)'
-
       DEALLOCATE(thisMatrix)
       CALL xPETScVector%clear()
       CALL yPETScVector%clear()
@@ -2427,6 +2428,7 @@ PROGRAM testMatrixTypes
 
 !Test for Trilinos sparsematrices
       ALLOCATE(TrilinosMatrixType :: thisMatrix)
+      COMPONENT_TEST("trilinosSparse%init")
       !check init
       CALL pList%clear()
       CALL pList%add('MatrixType->n',10_SNK)
@@ -2475,9 +2477,9 @@ PROGRAM testMatrixTypes
       bool = .NOT.thisMatrix%isInit
       ASSERT(bool, 'Trilinossparse%init(...)')
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL Trilinossparse%init(...)'
 
       !check set
+      COMPONENT_TEST("trilinosSparse%set")
       !test normal use case (unsymmetric and nonsymmetric)
       !want to build:
       ![1 2]
@@ -2573,7 +2575,6 @@ PROGRAM testMatrixTypes
       CALL thisMatrix%set(5,1,1._SRK)
       CALL thisMatrix%set(1,5,1._SRK)
       !no crash? good
-      WRITE(*,*) '  Passed: CALL Trilinossparse%set(...)'
 
       CALL thisMatrix%clear()
       CALL pList%clear()
@@ -2595,6 +2596,8 @@ PROGRAM testMatrixTypes
       CALL thisMatrix%set(3,1,4._SRK)
       CALL thisMatrix%set(3,2,5._SRK)
       CALL thisMatrix%set(3,3,6._SRK)
+
+      COMPONENT_TEST("trilinosSparse%matvec")
 !TODO: these interfaces are not implemented
 !      x=1.0_SRK
 !      y=1.0_SRK
@@ -2705,9 +2708,9 @@ PROGRAM testMatrixTypes
       bool = ALL((y .APPROXEQ. (/2._SRK,2._SRK,2._SRK/)))
       ASSERT(bool, 'BLAS_matvec(THISMATRIX=thisMatrix,ALPHA=2.0_SRK,X=xTrilVector,BETA=2.0_SRK,Y=yTrilVector)')
       FINFO() '-Trilsparse'
-      WRITE(*,*) '  Passed: CALL BLAS_matvec(...) Trilinossparse-matrix'
 
       !Perform test of functionality of get function
+      COMPONENT_TEST("trilinosSparse%get")
       ![1 0 2]
       ![0 0 3]
       ![4 5 6]
@@ -2781,7 +2784,6 @@ PROGRAM testMatrixTypes
           ASSERT(bool, 'Trilinossparse%get(...)')
       ENDSELECT
       CALL thisMatrix%clear()
-      WRITE(*,*) '  Passed: CALL Trilinossparse%get(...)'
       DEALLOCATE(thisMatrix)
 
       CALL xTrilinosVector%clear()

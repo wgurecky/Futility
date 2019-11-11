@@ -199,11 +199,13 @@ MODULE MatrixTypes_Base
 
   !> The parameter lists to use when validating a parameter list for
   !> initialization for a Banded Matrix Type.
-  TYPE(ParamType),PROTECTED,SAVE :: DistributedBandedMatrixType_reqParams, DistributedBandedMatrixType_optParams
+  TYPE(ParamType),PROTECTED,SAVE :: DistributedBandedMatrixType_reqParams, &
+                                    DistributedBandedMatrixType_optParams
 
   !> The parameter lists to use when validating a parameter list for
   !> initialization for a Banded Matrix Type.
-  TYPE(ParamType),PROTECTED,SAVE :: DistributedBlockBandedMatrixType_reqParams, DistributedBlockBandedMatrixType_optParams
+  TYPE(ParamType),PROTECTED,SAVE :: DistributedBlockBandedMatrixType_reqParams, &
+                                    DistributedBlockBandedMatrixType_optParams
 
   !> Logical flag to check whether the required and optional parameter lists
   !> have been created yet for the Matrix Types.

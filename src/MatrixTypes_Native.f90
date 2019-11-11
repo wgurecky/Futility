@@ -161,7 +161,11 @@ MODULE MatrixTypes_Native
     !> Temporary containers used before (and deallocated after) assembly
     INTEGER(SIK), ALLOCATABLE :: iTmp(:),jTmp(:)
     REAL(SRK),ALLOCATABLE :: elemTmp(:)
+    !> Logical flag for whether the matrix is assembled
     LOGICAL(SBK) :: isAssembled
+    !> Logical flag for whether bands are stored in ascending or desending
+    !> order by index
+    LOGICAL(SBK) :: isReversed
 
 !
 !List of Type Bound Procedures
@@ -439,7 +443,6 @@ MODULE MatrixTypes_Native
       CLASS(ParamType),INTENT(IN) :: Params
       TYPE(ParamType) :: validParams
       INTEGER(SIK) :: n,m,nnz
-      LOGICAL(SBK) :: bool
 
       !Check to set up required and optional param lists.
       IF(.NOT.MatrixType_Paramsflag) CALL MatrixTypes_Declare_ValidParams()
@@ -497,11 +500,10 @@ MODULE MatrixTypes_Native
       CHARACTER(LEN=*),PARAMETER :: myName='init_DistributedBandedMatrixParam'
       CLASS(DistributedBandedMatrixType),INTENT(INOUT) :: matrix
       CLASS(ParamType),INTENT(IN) :: Params
-      TYPE(ParamType) :: validParams
-      INTEGER(SIK) :: n,m,nnz,MPI_COMM_ID,rank,mpierr,nproc,i,blocksize,nlocal
-      LOGICAL(SBK) :: bool
-
 #ifdef HAVE_MPI
+      TYPE(ParamType) :: validParams
+      INTEGER(SIK) :: n,m,nnz,commID,rank,mpierr,nproc,i,blocksize,nlocal
+
       !Check to set up required and optional param lists.
       IF(.NOT.MatrixType_Paramsflag) CALL MatrixTypes_Declare_ValidParams()
 
@@ -512,7 +514,7 @@ MODULE MatrixTypes_Native
       ! Pull Data From Parameter List
       CALL validParams%get('MatrixType->n',n)
       CALL validParams%get('MatrixType->m',m)
-      CALL validParams%get('MatrixType->MPI_Comm_ID',MPI_COMM_ID)
+      CALL validParams%get('MatrixType->MPI_Comm_ID',commID)
       CALL validParams%get('MatrixType->nnz',nnz)
       CALL validParams%get('MatrixType->blockSize',blockSize)
       CALL validParams%get('MatrixType->nlocal',nlocal)
@@ -531,13 +533,13 @@ MODULE MatrixTypes_Native
           CALL eMatrixType%raiseError('Incorrect input to '// &
                modName//'::'//myName//' - Number of nonzero entries (nnz)'// &
                ' must be greater than 0!')
-        ELSEIF(MPI_COMM_ID == MPI_COMM_NULL) THEN
+        ELSEIF(commID == MPI_COMM_NULL) THEN
           CALL eMatrixType%raiseError('Incorrect input to '// &
                modName//'::'//myName//' - MPI communicator cannot have the same'// &
                ' value as MPI_COMM_NULL')
         ELSE
-          CALL MPI_Comm_rank(MPI_COMM_ID,rank,mpierr)
-          CALL MPI_Comm_size(MPI_COMM_ID,nproc,mpierr)
+          CALL MPI_Comm_rank(commID,rank,mpierr)
+          CALL MPI_Comm_size(commID,nproc,mpierr)
 
           REQUIRE(MOD(n,blockSize)==0)
           REQUIRE(MOD(m,blockSize)==0)
@@ -573,7 +575,7 @@ MODULE MatrixTypes_Native
             REQUIRE(MOD(nlocal,blockSize)==0)
             REQUIRE(m == n)
             ! Gather all nlocal and sum going forward
-            CALL MPI_AllGather(nlocal,1,MPI_INTEGER,matrix%iOffsets(2),1,MPI_INTEGER,MPI_Comm_ID,mpierr)
+            CALL MPI_AllGather(nlocal,1,MPI_INTEGER,matrix%iOffsets(2),1,MPI_INTEGER,commID,mpierr)
             DO i=2,nproc+1
               matrix%iOffsets(i) = matrix%iOffsets(i) + matrix%iOffsets(i-1)
             ENDDO
@@ -585,12 +587,11 @@ MODULE MatrixTypes_Native
 
           matrix%isInit=.TRUE.
           matrix%isAssembled=.FALSE.
-          matrix%isReversed=.FALSE.
           matrix%n=n*blockSize
           matrix%m=m*blockSize
           matrix%nnz=nnz
           matrix%blockSize = blockSize
-          matrix%comm=MPI_COMM_ID
+          matrix%comm=commID
         ENDIF
       ELSE
         CALL eMatrixType%raiseError('Incorrect call to '// &
@@ -609,12 +610,11 @@ MODULE MatrixTypes_Native
       CHARACTER(LEN=*),PARAMETER :: myName='init_DistributedBlockBandedMatrixParam'
       CLASS(DistributedBlockBandedMatrixType),INTENT(INOUT) :: matrix
       CLASS(ParamType),INTENT(IN) :: Params
-      TYPE(ParamType) :: validParams,blockParams
-      INTEGER(SIK) :: n,m,nnz,MPI_COMM_ID,rank,mpierr,nproc,i,blockSize,nlocal
-      INTEGER(SIK),ALLOCATABLE :: blkOffsetTmp(:)
-      LOGICAL(SBK) :: bool
-
 #ifdef HAVE_MPI
+      TYPE(ParamType) :: validParams,blockParams
+      INTEGER(SIK) :: n,rank,mpierr,commID,nproc,i,blockSize,nlocal
+      INTEGER(SIK),ALLOCATABLE :: blkOffsetTmp(:)
+
       !Check to set up required and optional param lists.
       IF(.NOT.MatrixType_Paramsflag) CALL MatrixTypes_Declare_ValidParams()
 
@@ -624,7 +624,7 @@ MODULE MatrixTypes_Native
 
       ! Pull Data From Parameter List
       CALL validParams%get('MatrixType->n',n)
-      CALL validParams%get('MatrixType->MPI_Comm_ID',MPI_COMM_ID)
+      CALL validParams%get('MatrixType->MPI_Comm_ID',commID)
       CALL validParams%get('MatrixType->blockSize',blockSize)
       CALL validParams%get('MatrixType->nlocal',nlocal)
 
@@ -638,8 +638,8 @@ MODULE MatrixTypes_Native
       ! %parent%
 
       ! Default to greedy partitioning, respecting blockSize
-      CALL MPI_Comm_rank(MPI_COMM_ID,rank,mpierr)
-      CALL MPI_Comm_size(MPI_COMM_ID,nproc,mpierr)
+      CALL MPI_Comm_rank(commID,rank,mpierr)
+      CALL MPI_Comm_size(commID,nproc,mpierr)
       REQUIRE(n/blockSize >= nproc)
 
 
@@ -657,7 +657,7 @@ MODULE MatrixTypes_Native
         ALLOCATE(blkOffsetTmp(nproc))
         REQUIRE(MOD(nlocal,blockSize)==0)
         matrix%nlocalBlocks = nlocal/blockSize
-        CALL MPI_AllGather(matrix%nlocalBlocks,1,MPI_INTEGER,blkOffsetTmp,1,MPI_INTEGER,MPI_Comm_ID,mpierr)
+        CALL MPI_AllGather(matrix%nlocalBlocks,1,MPI_INTEGER,blkOffsetTmp,1,MPI_INTEGER,commID,mpierr)
         matrix%blockOffset = SUM(blkOffsetTmp(1:rank))
         DEALLOCATE(blkOffsetTmp)
       ENDIF
@@ -689,7 +689,7 @@ MODULE MatrixTypes_Native
       INTEGER(SIK),ALLOCATABLE :: numOnDiag(:),idxOrig(:)
       INTEGER(SIK),ALLOCATABLE :: iSort(:),jSort(:)
       REAL(SRK),ALLOCATABLE :: valSort(:)
-      INTEGER(SIK) :: counter,currIdx,currBand,nBands,i,j
+      INTEGER(SIK) :: counter,nBands,i,j
       INTEGER(SLK) :: iLong,jLong,nLong,mLong
       INTEGER(SLK),ALLOCATABLE :: diagRank(:)
 
@@ -768,12 +768,12 @@ MODULE MatrixTypes_Native
       CHARACTER(LEN=*),PARAMETER :: myName='assemble_DistributedBandedMatrixType'
       CLASS(DistributedBandedMatrixType),INTENT(INOUT) :: thisMatrix
       INTEGER(SIK),INTENT(OUT),OPTIONAL :: ierr
+#ifdef HAVE_MPI
       TYPE(ParamType) :: bandedPList
       INTEGER(SIK) :: mpierr, rank, nproc, i, j, nBandLocal
       INTEGER(SIK),ALLOCATABLE :: nnzPerChunk(:),nband(:),bandSizeTmp(:)
       LOGICAL(SBK) :: blockNonzero
 
-#ifdef HAVE_MPI
       REQUIRE(thisMatrix%isInit)
       CALL MPI_Comm_rank(thisMatrix%comm,rank,mpierr)
       CALL MPI_Comm_size(thisMatrix%comm,nproc,mpierr)
@@ -1040,8 +1040,9 @@ MODULE MatrixTypes_Native
     SUBROUTINE clear_DistributedBandedMatrixType(matrix)
       CHARACTER(LEN=*),PARAMETER :: myName='clear_DistributedBandedMatrixType'
       CLASS(DistributedBandedMatrixType),INTENT(INOUT) :: matrix
-      INTEGER(SIK) :: i
 #ifdef HAVE_MPI
+      INTEGER(SIK) :: i
+
       matrix%isInit=.FALSE.
       matrix%isCreated=.FALSE.
       matrix%isAssembled=.FALSE.
@@ -1074,8 +1075,8 @@ MODULE MatrixTypes_Native
     SUBROUTINE clear_DistributedBlockBandedMatrixType(matrix)
       CHARACTER(LEN=*),PARAMETER :: myName='clear_DistributedBlockBandedMatrixType'
       CLASS(DistributedBlockBandedMatrixType),INTENT(INOUT) :: matrix
-      INTEGER(SIK) :: i
 #ifdef HAVE_MPI
+      INTEGER(SIK) :: i
       matrix%blockMask = .FALSE.
       matrix%blockSize = 0
       matrix%nLocalBlocks = 0
@@ -1250,10 +1251,10 @@ MODULE MatrixTypes_Native
       INTEGER(SIK),INTENT(IN) :: i
       INTEGER(SIK),INTENT(IN) :: j
       REAL(SRK),INTENT(IN) :: setval
-      INTEGER(SIK) :: rank,nproc,mpierr,nHeldLower,bandLoc,elemIdx,k
+#ifdef HAVE_MPI
+      INTEGER(SIK) :: rank,nproc,mpierr,k
       LOGICAL(SBK) :: flag
       CHARACTER(LEN=64) :: msg
-#ifdef HAVE_MPI
       flag = .FALSE.
       REQUIRE(matrix%isInit)
       IF(.NOT. matrix%isAssembled) THEN
@@ -1293,7 +1294,7 @@ MODULE MatrixTypes_Native
       IF (.NOT. flag) THEN
         WRITE(msg,'(I2,A,I9,A,I9)') rank," at ",i,',',j
         CALL eMatrixType%raiseWarning('Invalid matrix set in '// &
-             modName//'::'//myname//' for rank '//msg
+             modName//'::'//myname//' for rank '//msg)
       ENDIF
 
 #endif
@@ -1313,10 +1314,10 @@ MODULE MatrixTypes_Native
       INTEGER(SIK),INTENT(IN) :: i
       INTEGER(SIK),INTENT(IN) :: j
       REAL(SRK),INTENT(IN) :: setval
+#ifdef HAVE_MPI
       INTEGER(SIK) :: rank,mpierr,offset
       LOGICAL(SBK) :: flag
       CHARACTER(LEN=64) :: msg
-#ifdef HAVE_MPI
       REQUIRE(matrix%isInit)
 
       flag = .FALSE.
@@ -1340,7 +1341,7 @@ MODULE MatrixTypes_Native
       IF (.NOT. flag) THEN
         WRITE(msg,'(I2,A,I9,A,I9)') rank," at ",i,',',j
         CALL eMatrixType%raiseWarning('Invalid matrix set in '// &
-             modName//'::'//myname//' for rank '//msg
+             modName//'::'//myname//' for rank '//msg)
       ENDIF
 #endif
     ENDSUBROUTINE set_DistributedBlockBandedMatrixType
@@ -1493,10 +1494,9 @@ MODULE MatrixTypes_Native
       INTEGER(SIK),INTENT(IN) :: i
       INTEGER(SIK),INTENT(IN) :: j
       REAL(SRK),INTENT(INOUT) :: getval
-      INTEGER(SIK) :: bandLoc, elemidx, k, mpierr, rank
-      LOGICAL(SBK) :: found
-
 #ifdef HAVE_MPI
+      INTEGER(SIK) :: k, mpierr, rank
+
       getval = 0.0_SRK
       CALL MPI_Comm_rank(matrix%comm,rank,mpierr)
       IF (j > matrix%jOffsets(rank+1) .AND. j <= matrix%jOffsets(rank+2)) THEN
@@ -1526,9 +1526,8 @@ MODULE MatrixTypes_Native
       INTEGER(SIK),INTENT(IN) :: i
       INTEGER(SIK),INTENT(IN) :: j
       REAL(SRK),INTENT(INOUT) :: getval
+#ifdef HAVE_MPI
       INTEGER(SIK) :: rank,mpierr,offset
-      REAL(SRK) :: val
-#if HAVE_MPI
       CALL MPI_Comm_Rank(matrix%comm,rank,mpierr)
       IF ((i-1)/matrix%blockSize /= (j-1)/matrix%blockSize) THEN
         CALL matrix%DistributedBandedMatrixType%get(i,j,getVal)
@@ -1699,7 +1698,6 @@ MODULE MatrixTypes_Native
     SUBROUTINE transpose_DistributedBandedMatrixType(matrix)
       CHARACTER(LEN=*),PARAMETER :: myName='transpose_DistributedBandedMatrixType'
       CLASS(DistributedBandedMatrixType),INTENT(INOUT) :: matrix
-      INTEGER(SIK) :: mTmp,i
 
       CALL eMatrixType%raiseFatalError(modName//'::'//myName// &
            ' - routine is not implemented!')

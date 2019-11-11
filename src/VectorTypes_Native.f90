@@ -566,7 +566,6 @@ MODULE VectorTypes_Native
     SUBROUTINE setAll_array_NativeDistributedVectorType(thisVector,setval,ierr)
       CLASS(NativeDistributedVectorType),INTENT(INOUT) :: thisVector
       REAL(SRK),INTENT(IN) :: setval(:)
-      INTEGER(SIK) :: i
       INTEGER(SIK),INTENT(OUT),OPTIONAL ::ierr
 
       REQUIRE(thisVector%isInit)
@@ -617,7 +616,6 @@ MODULE VectorTypes_Native
       INTEGER(SIK),INTENT(IN) :: istt
       INTEGER(SIK),INTENT(IN) :: istp
       INTEGER(SIK),INTENT(OUT),OPTIONAL ::ierr
-      INTEGER(SIK) :: low,high
 
       REQUIRE(thisVector%isInit)
       REQUIRE(istt <= istp)
@@ -743,7 +741,7 @@ MODULE VectorTypes_Native
       INTEGER(SIK),INTENT(IN) :: istp
       REAL(SRK),INTENT(OUT) :: getval(:)
       INTEGER(SIK),INTENT(OUT),OPTIONAL ::ierr
-      INTEGER(SIK) :: i, lowDest, highDest, lowSrc, highSrc
+      INTEGER(SIK) :: lowDest, highDest, lowSrc, highSrc
 
       REQUIRE(thisVector%isInit)
       REQUIRE(0 < istt .AND. istt <= istp .AND. istp <= thisVector%n)

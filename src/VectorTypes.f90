@@ -269,7 +269,7 @@ MODULE VectorTypes
 #endif
             CASE DEFAULT
               CALL eVectorType%raiseError(modName//"::"//myName//" - "// &
-                "Unrecognized vector type requested")
+                   "Unrecognized vector type requested")
             ENDSELECT
         CASE(VM_PETSC)
 #ifdef FUTILITY_HAVE_PETSC
@@ -649,8 +649,9 @@ MODULE VectorTypes
       INTEGER(SIK),INTENT(IN),OPTIONAL :: incx
       INTEGER(SIK),INTENT(IN),OPTIONAL :: incy
       REAL(SRK) :: r
+#ifdef HAVE_MPI
       INTEGER(SIK) :: mpierr
-
+#endif
       SELECTTYPE(thisVector); TYPE IS(RealVectorType)
         SELECTTYPE(thatVector); TYPE IS(RealVectorType)
           IF(PRESENT(n) .AND. PRESENT(incx) .AND. PRESENT(incy)) THEN
@@ -797,7 +798,9 @@ MODULE VectorTypes
       INTEGER(SIK),INTENT(IN),OPTIONAL :: n
       INTEGER(SIK),INTENT(IN),OPTIONAL :: incx
       REAL(SRK) :: norm2
+#ifdef HAVE_MPI
       INTEGER(SIK) :: mpierr
+#endif
 
       SELECTTYPE(thisVector); TYPE IS(RealVectorType)
         IF(PRESENT(n) .AND. PRESENT(incx)) THEN
