@@ -165,19 +165,6 @@ MODULE ExceptionHandler
     LOGICAL(SBK),PRIVATE :: logFileActive=.FALSE.
     !> The output unit identifier for the log file
     INTEGER(SIK),PRIVATE :: logFileUnit=666
-    !> The number of INFORMATION exceptions that have been raised
-    INTEGER(SIK),PRIVATE :: nInfo=0
-    !> The number of WARNING exceptions that have been raised
-    INTEGER(SIK),PRIVATE :: nWarn=0
-    !> The number of DEBUG exceptions that have been raised
-    INTEGER(SIK),PRIVATE :: nDebug=0
-    !> The number of ERROR exceptions that have been raised
-    INTEGER(SIK),PRIVATE :: nError=0
-    !> The number of FATAL ERROR exceptions that have been raised
-    INTEGER(SIK),PRIVATE :: nFatal=0
-    !> Defines whether or not to report exceptions to standard error
-    LOGICAL(SBK),PRIVATE :: quiet(EXCEPTION_SIZE-1)= &
-      (/.FALSE.,.FALSE.,.TRUE.,.FALSE./)
     !> Logical array that allows for selective verbosity of exception types
     LOGICAL(SBK),PRIVATE :: verbose(EXCEPTION_SIZE-1)= &
       (/.TRUE.,.TRUE.,.FALSE.,.TRUE./)
@@ -329,34 +316,34 @@ MODULE ExceptionHandler
 !>
   SUBROUTINE init_ExceptionHandlerType(e)
     CLASS(ExceptionHandlerType),INTENT(INOUT) :: e
-    TYPE(ExceptionTypeFatal),TARGET,SAVE :: myFatal
-    TYPE(ExceptionTypeDebug),TARGET,SAVE :: myDebug
-    TYPE(ExceptionTypeInformation),TARGET,SAVE :: myInformation
-    TYPE(ExceptionTypeError),TARGET,SAVE :: myError
-    TYPE(ExceptionTypeWarning),TARGET,SAVE :: myWarning
+    TYPE(ExceptionTypeFatal),TARGET,SAVE :: defaultFatal
+    TYPE(ExceptionTypeDebug),TARGET,SAVE :: defaultDebug
+    TYPE(ExceptionTypeInformation),TARGET,SAVE :: defaultInformation
+    TYPE(ExceptionTypeError),TARGET,SAVE :: defaultError
+    TYPE(ExceptionTypeWarning),TARGET,SAVE :: defaultWarning
 
     REQUIRE(.NOT. e%isInit)
     REQUIRE(.NOT. ALLOCATED(e%exceptionRegistry))
 
-    CALL myInformation%init(EXCEPTION_INFORMATION)
-    CALL myWarning%init(EXCEPTION_WARNING)
-    CALL myDebug%init(EXCEPTION_DEBUG)
-    CALL myError%init(EXCEPTION_ERROR)
-    CALL myFatal%init(EXCEPTION_FATAL_ERROR)
-    CALL myFatal%setStopMode(.TRUE.)
+    CALL defaultInformation%init(EXCEPTION_INFORMATION)
+    CALL defaultWarning%init(EXCEPTION_WARNING)
+    CALL defaultDebug%init(EXCEPTION_DEBUG)
+    CALL defaultError%init(EXCEPTION_ERROR)
+    CALL defaultFatal%init(EXCEPTION_FATAL_ERROR)
+    CALL defaultFatal%setStopMode(.TRUE.)
 
     ! create the default registry
     ALLOCATE(e%exceptionRegistry(EXCEPTION_SIZE))
     e%exceptionRegistry(EXCEPTION_ERROR)%expobj &
-      => myError
+      => defaultError
     e%exceptionRegistry(EXCEPTION_WARNING)%expobj &
-      => myWarning
+      => defaultWarning
     e%exceptionRegistry(EXCEPTION_DEBUG)%expobj &
-      => myDebug
+      => defaultDebug
     e%exceptionRegistry(EXCEPTION_FATAL_ERROR)%expobj &
-      => myFatal
+      => defaultFatal
     e%exceptionRegistry(EXCEPTION_INFORMATION)%expobj &
-      => myInformation
+      => defaultInformation
 
     CALL e%reset()
     e%isInit = .TRUE.
@@ -375,19 +362,13 @@ MODULE ExceptionHandler
       TYPE(ExceptionHandlerType),INTENT(OUT) :: e
       TYPE(ExceptionHandlerType),INTENT(IN) :: e2
       e%isInit=e2%isInit
-      e%nInfo=e2%nInfo
-      e%nWarn=e2%nWarn
-      e%nDebug=e2%nDebug
-      e%nError=e2%nError
-      e%nFatal=e2%nFatal
       e%lastMesg=e2%lastMesg
       e%logFileUnit=e2%logFileUnit
       e%stopOnError=e2%stopOnError
       e%logFileActive=e2%logFileActive
-      e%quiet=e2%quiet
       e%verbose=e2%verbose
-      IF(.NOT. ALLOCATED(e%exceptionRegistry) &
-         .AND. ALLOCATED(e2%exceptionRegistry)) THEN
+      IF(ALLOCATED(e2%exceptionRegistry)) THEN
+        IF(ALLOCATED(e%exceptionRegistry)) DEALLOCATE(e%exceptionRegistry)
         ALLOCATE(e%exceptionRegistry(SIZE(e2%exceptionRegistry)))
         e%exceptionRegistry=e2%exceptionRegistry
       ENDIF
@@ -443,17 +424,18 @@ MODULE ExceptionHandler
     PURE SUBROUTINE reset(e)
       CLASS(ExceptionHandlerType),INTENT(INOUT) :: e
       INTEGER(SIK) :: i
+      LOGICAL(SBK),DIMENSION(:) :: quiet(4)
       NULLIFY(e%surrogate)
       e%lastMesg=''
       e%logFileUnit=666
       e%stopOnError=.TRUE.
       e%logFileActive=.FALSE.
-      e%quiet=(/.FALSE.,.FALSE.,.TRUE.,.FALSE./)
+      quiet=(/.FALSE.,.FALSE.,.TRUE.,.FALSE./)
       e%verbose=(/.TRUE.,.TRUE.,.FALSE.,.TRUE./)
       IF(ALLOCATED(e%exceptionRegistry)) THEN
         DO i=1,SIZE(e%exceptionRegistry)-1
           CALL e%exceptionRegistry(i)%expobj%resetCounter()
-          CALL e%exceptionRegistry(i)%expobj%setQuietMode(e%quiet(i))
+          CALL e%exceptionRegistry(i)%expobj%setQuietMode(quiet(i))
           CALL e%exceptionRegistry(i)%expobj%setVerboseMode(e%verbose(i))
         ENDDO
       ENDIF
@@ -715,7 +697,6 @@ MODULE ExceptionHandler
       LOGICAL(SBK),INTENT(IN) :: bool
       INTEGER(SIK) :: i
       IF(ASSOCIATED(e%surrogate)) CALL copyFromSurrogate(e)
-      e%quiet=bool
       IF(ALLOCATED(e%exceptionRegistry)) THEN
         DO i=1,SIZE(e%exceptionRegistry)
           CALL e%exceptionRegistry(i)%expobj%setQuietMode(bool)
@@ -737,8 +718,6 @@ MODULE ExceptionHandler
       LOGICAL(SBK),INTENT(IN) :: bool
       IF(ASSOCIATED(e%surrogate)) CALL copyFromSurrogate(e)
       IF(EXCEPTION_OK < eCode .AND. eCode < EXCEPTION_SIZE) &
-        e%quiet(eCode)=bool
-      IF(EXCEPTION_OK < eCode .AND. eCode < EXCEPTION_SIZE) &
         CALL e%exceptionRegistry(eCode)%expobj%setQuietMode(bool)
     ENDSUBROUTINE setQuietMode_eCode
 !
@@ -756,10 +735,9 @@ MODULE ExceptionHandler
       INTEGER(SIK) :: n, i
       IF(ASSOCIATED(e%surrogate)) CALL copyFromSurrogate(e)
       n=MIN(EXCEPTION_SIZE-1,SIZE(bool))
-      e%quiet(1:n)=bool(1:n)
       IF(ALLOCATED(e%exceptionRegistry)) THEN
-        DO i=1,SIZE(e%exceptionRegistry)-1
-          CALL e%exceptionRegistry(i)%expobj%setQuietMode(e%quiet(i))
+        DO i=1,n
+          CALL e%exceptionRegistry(i)%expobj%setQuietMode(bool(i))
         ENDDO
       ENDIF
     ENDSUBROUTINE setQuietMode_array
@@ -770,11 +748,30 @@ MODULE ExceptionHandler
 !> @param e the exception object
 !> @returns bool indicates whether or not exception reporting is suppressed
 !>
-    PURE FUNCTION isQuietMode_all(e) RESULT(bool)
+    FUNCTION isQuietMode_all(e) RESULT(bool)
       CLASS(ExceptionHandlerType),INTENT(IN) :: e
       LOGICAL(SBK) :: bool
-      bool=ALL(e%quiet)
-      IF(ASSOCIATED(e%surrogate)) bool=ALL(e%surrogate%quiet)
+      LOGICAL(SBK),ALLOCATABLE :: quietList(:)
+      INTEGER(SIK) :: nRe, i
+
+      IF(ASSOCIATED(e%surrogate)) THEN
+        nRe = SIZE(e%surrogate%exceptionRegistry)
+        ALLOCATE(quietList(SIZE(e%surrogate%exceptionRegistry)))
+        DO i=1,nRe
+          quietList(i) = e%surrogate%exceptionRegistry(i)%expobj%getQuietMode()
+        ENDDO
+        WRITE(*,*) "Surrogate,", quietList
+      ELSE
+        nRe = SIZE(e%exceptionRegistry)
+        ALLOCATE(quietList(SIZE(e%exceptionRegistry)))
+        DO i=1,nRe
+          quietList(i) = e%exceptionRegistry(i)%expobj%getQuietMode()
+        ENDDO
+        WRITE(*,*) "Base     ,", quietList
+      ENDIF
+
+      bool=ALL(quietList)
+
     ENDFUNCTION isQuietMode_all
 !
 !-------------------------------------------------------------------------------
@@ -789,8 +786,9 @@ MODULE ExceptionHandler
       LOGICAL(SBK) :: bool
       bool=.FALSE.
       IF((EXCEPTION_OK < eCode) .AND. (eCode <= EXCEPTION_SIZE-1)) THEN
-        bool=e%quiet(eCode)
-        IF(ASSOCIATED(e%surrogate)) bool=e%surrogate%quiet(eCode)
+        bool=e%exceptionRegistry(eCode)%expobj%getQuietMode()
+        IF(ASSOCIATED(e%surrogate)) bool=&
+          e%surrogate%exceptionRegistry(eCode)%expobj%getQuietMode()
       ENDIF
     ENDFUNCTION isQuietMode_eCode
 !
@@ -1179,15 +1177,10 @@ MODULE ExceptionHandler
       TYPE(ExceptionHandlerType),POINTER :: tmpE
       tmpE => e%surrogate
       NULLIFY(e%surrogate)
+      e%isInit=tmpE%isInit
       e%stopOnError=tmpE%stopOnError
       e%logFileActive=tmpE%logFileActive
-      e%quiet=tmpE%quiet
       e%logFileUnit=tmpE%logFileUnit
-      e%nInfo=tmpE%nInfo
-      e%nWarn=tmpE%nWarn
-      e%nError=tmpE%nError
-      e%nFatal=tmpE%nFatal
-      e%nDebug=tmpE%nDebug
       e%verbose=tmpE%verbose
       e%lastMesg=tmpE%lastMesg
       IF(ALLOCATED(tmpE%exceptionRegistry)) THEN

@@ -64,6 +64,9 @@ MODULE ExceptionTypes
       !> @copybrief ExceptionTypes::setQuietMode_ExceptionTypeBase
       !> @copydetails ExceptionTypes::setQuietMode_ExceptionTypeBase
       PROCEDURE,PASS :: setQuietMode => setQuietMode_ExceptionTypeBase
+      !> @copybrief ExceptionTypes::getQuietMode_ExceptionTypeBase
+      !> @copydetails ExceptionTypes::getQuietMode_ExceptionTypeBase
+      PROCEDURE,PASS :: getQuietMode => getQuietMode_ExceptionTypeBase
       !> @copybrief ExceptionTypes::setVerboseMode_ExceptionTypeBase
       !> @copydetails ExceptionTypes::setVerboseMode_ExceptionTypeBase
       PROCEDURE,PASS :: setVerboseMode => setVerboseMode_ExceptionTypeBase
@@ -141,7 +144,6 @@ ENDINTERFACE
     SUBROUTINE init_ExceptionTypeBase(this,tag)
       CLASS(ExceptionTypeBase),INTENT(INOUT) :: this
       INTEGER(SIK),INTENT(IN) :: tag
-      ! REQUIRE(.NOT. this%isInit)
 
       this%tag = tag
       this%isInit = .TRUE.
@@ -188,6 +190,17 @@ ENDINTERFACE
       this%quiet = quiet
 
     ENDSUBROUTINE setQuietMode_ExceptionTypeBase
+!
+!-------------------------------------------------------------------------------
+!> @brief Set the quiet mode
+!>
+    PURE FUNCTION getQuietMode_ExceptionTypeBase(this) RESULT(quiet)
+      CLASS(ExceptionTypeBase),INTENT(IN) :: this
+      LOGICAL(SBK) :: quiet
+
+      quiet = this%quiet
+
+    ENDFUNCTION getQuietMode_ExceptionTypeBase
 !
 !-------------------------------------------------------------------------------
 !> @brief Set the quiet mode
