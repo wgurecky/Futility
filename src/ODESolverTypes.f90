@@ -699,6 +699,7 @@ SUBROUTINE solve_implicit(f,myLS,t,dt,yf,ydot,rhs,converged,beta,tol,updateJ,max
 
   INTEGER(SIK) :: j, maxIterations
   REAL(SRK) :: resid
+  CLASS(VectorType),ALLOCATABLE :: yf_tmp
 
   !set maximum number of iterations
   IF(PRESENT(maxIter_in)) THEN
@@ -712,8 +713,13 @@ SUBROUTINE solve_implicit(f,myLS,t,dt,yf,ydot,rhs,converged,beta,tol,updateJ,max
     CALL estimate_jacobian(f,t,yf,beta*dt,myLS%A)
   ENDIF
 
+  !set restart point
+  ALLOCATE(yf_tmp,SOURCE=yf)
+  CALL BLAS_copy(yf,yf_tmp)
+
   !Initial guess is forward euler
   CALL BLAS_axpy(ydot,yf,dt)
+
   !solve nonlinear system
   resid=2*tol
   converged=.FALSE.
@@ -729,7 +735,34 @@ SUBROUTINE solve_implicit(f,myLS,t,dt,yf,ydot,rhs,converged,beta,tol,updateJ,max
     resid=BLAS_nrm2(myLS%x)
     j=j+1
   ENDDO
-  IF(resid<=tol) converged=.TRUE.
+  IF(resid<=tol) THEN
+    converged=.TRUE.
+    RETURN
+  ELSE
+    !fast solve failed
+    !reset yf and try slow method
+    CALL BLAS_copy(yf_tmp, yf)
+    j=1
+    resid=2*tol
+    CALL estimate_jacobian(f,t,yf,beta*dt,myLS%A)
+    CALL BLAS_axpy(ydot,yf,dt)
+    !Always update jacobian after each newton step
+    DO WHILE (resid>tol .AND. j<=maxIterations)
+      CALL estimate_jacobian(f,t,yf,beta*dt,myLS%A)
+      CALL f%eval(t+dt,yf,ydot)
+      CALL BLAS_copy(rhs,myLS%b)
+      CALL BLAS_axpy(yf,myLS%b,-1.0_SRK)
+      CALL BLAS_axpy(ydot,myLS%b,dt*beta)
+      CALL BLAS_scal(myLS%b,1.0_SRK)
+      CALL myLS%solve()
+      !Slow restricted newton update
+      CALL BLAS_axpy(myLS%x,yf,0.2_SRK)
+      resid=BLAS_nrm2(myLS%x)
+      j=j+1
+    ENDDO
+    IF(resid<=tol) converged=.TRUE.
+  ENDIF
+
 ENDSUBROUTINE solve_implicit
 !
 !-------------------------------------------------------------------------------
